@@ -1,0 +1,339 @@
+"""Ground Control message and action handlers.
+
+Contains the business logic invoked by the Chainlit action callbacks
+and message hooks.  Keeps the ``app.py`` thin by isolating orchestration
+calls, response formatting, and HITL sync-prompt processing here.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from singularity.core.agent_base import (
+    AgentResponse,
+    AgentStatus,
+    HeartbeatEvent,
+    InterruptRequest,
+    PromptPayload,
+    TelemetryFrame,
+)
+from singularity.core.agent_registry import get_agent, get_all_agents
+from singularity.persistence.repository import (
+    LogRepository,
+    StateRepository,
+)
+from singularity.telemetry.events import (
+    TelemetryEvent,
+    TelemetryEventType,
+    get_event_bus,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _utc_now() -> datetime:
+    """Return the current UTC timestamp."""
+    return datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# User prompt handling
+# ---------------------------------------------------------------------------
+
+async def handle_user_prompt(
+    message_content: str,
+) -> tuple[AgentResponse | None, str]:
+    """Wrap operator input as a PromptPayload and route through agents.
+
+    Sends the prompt to the first available agent (by priority order).
+    Logs the communication and publishes a telemetry event on success.
+
+    Args:
+        message_content: Raw text from the Ground Control operator.
+
+    Returns:
+        A tuple of ``(AgentResponse, formatted_display_text)``.  If no
+        agents are available, returns ``(None, error_message)``.
+    """
+    agents = get_all_agents()
+    if not agents:
+        error_text = (
+            "⚠️ **No agents available.** The constellation has not been "
+            "initialized or all agents are offline."
+        )
+        return None, error_text
+
+    # Route to the highest-priority agent
+    target_agent = agents[0]
+
+    payload = PromptPayload(
+        source_agent_id="ground_control",
+        target_agent_id=target_agent.agent_id,
+        content=message_content,
+    )
+
+    logger.info(
+        "Routing prompt to %s (%s)",
+        target_agent.agent_name,
+        target_agent.agent_id,
+    )
+
+    try:
+        response = await target_agent.receive_prompt(payload)
+
+        # Log the communication
+        await LogRepository.log_communication(
+            sender="ground_control",
+            recipient=target_agent.agent_id,
+            message=message_content,
+        )
+        await LogRepository.log_communication(
+            sender=target_agent.agent_id,
+            recipient="ground_control",
+            message=response.content,
+        )
+
+        # Publish agent response event
+        bus = get_event_bus()
+        await bus.publish(TelemetryEvent(
+            event_type=TelemetryEventType.AGENT_RESPONSE,
+            source_agent_id=target_agent.agent_id,
+            data={
+                "content": response.content,
+                "telemetry": response.telemetry.model_dump(mode="json"),
+                "proposed_actions_count": len(response.proposed_actions),
+            },
+        ))
+
+        display_text = format_agent_response(response)
+        return response, display_text
+
+    except Exception:
+        logger.exception(
+            "Agent %s failed to process prompt",
+            target_agent.agent_id,
+        )
+
+        # Publish error event
+        bus = get_event_bus()
+        await bus.publish(TelemetryEvent(
+            event_type=TelemetryEventType.ERROR,
+            source_agent_id=target_agent.agent_id,
+            data={"message": f"Failed to process prompt: {message_content[:100]}"},
+        ))
+
+        error_text = (
+            f"❌ **Agent `{target_agent.agent_name}` failed to process "
+            f"the prompt.** The error has been logged."
+        )
+        return None, error_text
+
+
+# ---------------------------------------------------------------------------
+# Sync prompt (HITL) resolution
+# ---------------------------------------------------------------------------
+
+async def handle_sync_prompt_response(
+    action_id: str,
+    resolution: str,
+    operator_id: str,
+    modification_note: str | None = None,
+) -> None:
+    """Process an operator's decision on a sync prompt / interrupt.
+
+    Persists the resolution to the database and logs the decision.
+
+    Args:
+        action_id: The unique ID of the action / sync prompt.
+        resolution: The decision — ``approved``, ``denied``, or ``modified``.
+        operator_id: Identifier of the operator who made the decision.
+        modification_note: Optional note when the action is modified.
+    """
+    logger.info(
+        "Sync prompt %s resolved as %s by %s",
+        action_id,
+        resolution,
+        operator_id,
+    )
+
+    try:
+        await StateRepository.resolve_sync_prompt(
+            prompt_id=action_id,
+            resolution=resolution,
+            resolved_by=operator_id,
+            modification_note=modification_note,
+        )
+    except Exception:
+        logger.exception("Failed to persist sync prompt resolution for %s", action_id)
+        raise
+
+    # Audit log
+    await LogRepository.log_communication(
+        sender=operator_id,
+        recipient="orchestration",
+        message=f"Sync prompt {action_id} resolved: {resolution}",
+        log_level="info",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat trigger
+# ---------------------------------------------------------------------------
+
+async def handle_heartbeat_trigger() -> dict[str, Any]:
+    """Dispatch a manual heartbeat to all agents in the constellation.
+
+    Calls :meth:`process_heartbeat` on every registered agent, collects
+    their telemetry frames, and returns summary statistics.
+
+    Returns:
+        A dictionary with heartbeat results including frame count and
+        per-agent status summaries.
+    """
+    agents = get_all_agents()
+    if not agents:
+        return {"frames_collected": 0, "agents": [], "error": "No agents available"}
+
+    # Build constellation summary from current statuses
+    constellation_summary: dict[str, AgentStatus] = {
+        agent.agent_id: agent.status for agent in agents
+    }
+
+    heartbeat = HeartbeatEvent(
+        sequence_number=0,  # Manual heartbeats use sequence 0
+        constellation_summary=constellation_summary,
+    )
+
+    frames: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for agent in agents:
+        try:
+            frame = await agent.process_heartbeat(heartbeat)
+            frames.append({
+                "agent_id": frame.agent_id,
+                "status": frame.status.value,
+                "metrics": frame.metrics,
+                "message": frame.message,
+            })
+        except Exception:
+            logger.exception(
+                "Heartbeat failed for agent %s",
+                agent.agent_id,
+            )
+            errors.append(agent.agent_id)
+
+    result: dict[str, Any] = {
+        "frames_collected": len(frames),
+        "frames": frames,
+        "errors": errors,
+        "total_agents": len(agents),
+    }
+
+    logger.info(
+        "Manual heartbeat complete: %d/%d frames collected",
+        len(frames),
+        len(agents),
+    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Response formatting
+# ---------------------------------------------------------------------------
+
+def format_agent_response(response: AgentResponse) -> str:
+    """Format an AgentResponse for display in the Chainlit UI.
+
+    Renders the response content, telemetry summary, and any proposed
+    actions as a structured Markdown string.
+
+    Args:
+        response: The agent response to format.
+
+    Returns:
+        A Markdown-formatted string for display.
+    """
+    status_emoji: dict[AgentStatus, str] = {
+        AgentStatus.INITIALIZING: "🔄",
+        AgentStatus.NOMINAL: "🟢",
+        AgentStatus.BUSY: "🟡",
+        AgentStatus.INTERRUPTED: "🟠",
+        AgentStatus.ERROR: "🔴",
+        AgentStatus.OFFLINE: "⚫",
+    }
+
+    telemetry = response.telemetry
+    emoji = status_emoji.get(telemetry.status, "⚪")
+
+    lines: list[str] = [
+        f"### 📡 Response from `{response.agent_id}`",
+        "",
+        response.content,
+        "",
+        "---",
+        f"**Telemetry** {emoji} `{telemetry.status.value.upper()}`",
+    ]
+
+    if telemetry.metrics:
+        lines.append("")
+        for key, value in telemetry.metrics.items():
+            lines.append(f"  • **{key}**: `{value}`")
+
+    if telemetry.message:
+        lines.append(f"  • *{telemetry.message}*")
+
+    if response.proposed_actions:
+        lines.append("")
+        lines.append(
+            f"⚠️ **{len(response.proposed_actions)} proposed action(s)** "
+            "require approval:"
+        )
+        for action in response.proposed_actions:
+            lines.append(
+                f"  • `{action.action_type}` — {action.description} "
+                f"(Risk: **{action.risk_level.value}**)"
+            )
+
+    return "\n".join(lines)
+
+
+def format_telemetry(frame: TelemetryFrame) -> str:
+    """Format a TelemetryFrame as a compact status string.
+
+    Intended for use as inline telemetry annotations in the Chainlit
+    message stream.
+
+    Args:
+        frame: The telemetry frame to format.
+
+    Returns:
+        A single-line Markdown-formatted telemetry summary.
+    """
+    status_emoji: dict[AgentStatus, str] = {
+        AgentStatus.INITIALIZING: "🔄",
+        AgentStatus.NOMINAL: "🟢",
+        AgentStatus.BUSY: "🟡",
+        AgentStatus.INTERRUPTED: "🟠",
+        AgentStatus.ERROR: "🔴",
+        AgentStatus.OFFLINE: "⚫",
+    }
+
+    emoji = status_emoji.get(frame.status, "⚪")
+    timestamp_str = frame.timestamp.strftime("%H:%M:%S")
+
+    parts = [
+        f"{emoji} `{frame.agent_id}` — **{frame.status.value}** @ {timestamp_str}",
+    ]
+
+    if frame.metrics:
+        metric_strs = [f"{k}={v}" for k, v in frame.metrics.items()]
+        parts.append(f"  [{', '.join(metric_strs)}]")
+
+    if frame.message:
+        parts.append(f"  *{frame.message}*")
+
+    return " ".join(parts)

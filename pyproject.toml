@@ -1,0 +1,49 @@
+[project]
+name = "simulated-singularity-cc"
+version = "0.1.0"
+description = "Constellation-Class Multi-Agent Command & Control Environment"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=0.4",
+    "langchain-core>=0.3",
+    "apscheduler>=3.11",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "chainlit>=2.5",
+]
+
+[project.scripts]
+singularity = "singularity.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src/singularity"]
+branch = false
+omit = [
+    "src/singularity/cli.py",
+    "src/singularity/core/agent_registry.py",
+    "src/singularity/core/models.py",
+    "src/singularity/persistence/database.py",
+    "src/singularity/ground_control/*",
+    "src/singularity/orchestration/*",
+    "src/singularity/scheduler/*",
+    "src/singularity/telemetry/*"
+]

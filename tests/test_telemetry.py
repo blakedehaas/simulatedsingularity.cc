@@ -1,0 +1,57 @@
+import pytest
+import asyncio
+from unittest.mock import patch, MagicMock
+
+from singularity.telemetry.events import TelemetryEventBus, TelemetryEvent, TelemetryEventType
+from singularity.telemetry.collector import TelemetryCollector
+from singularity.core.agent_base import TelemetryFrame, AgentStatus
+
+@pytest.fixture
+def event_bus():
+    return TelemetryEventBus()
+
+@pytest.fixture
+def collector(event_bus):
+    c = TelemetryCollector(bus=event_bus)
+    c.start()
+    return c
+
+@pytest.mark.asyncio
+async def test_event_bus_publish(event_bus):
+    received = []
+    async def handler(event):
+        received.append(event)
+    
+    event_bus.subscribe(TelemetryEventType.HEARTBEAT, handler)
+    event = TelemetryEvent(
+        event_type=TelemetryEventType.HEARTBEAT,
+        source_agent_id="test",
+        data={"test": "data"}
+    )
+    await event_bus.publish(event)
+    
+    assert len(received) == 1
+    assert received[0].data["test"] == "data"
+
+@pytest.mark.asyncio
+async def test_collector_record(collector, event_bus):
+    frame = TelemetryFrame(
+        agent_id="test-agent",
+        status=AgentStatus.NOMINAL,
+        metrics={"cpu": 10.0},
+        message="Test message"
+    )
+    
+    event = TelemetryEvent(
+        event_type=TelemetryEventType.AGENT_RESPONSE,
+        source_agent_id="test-agent",
+        data={"telemetry": frame.model_dump()}
+    )
+    await event_bus.publish(event)
+    
+    # Allow event loop to process the queue
+    await asyncio.sleep(0)
+    
+    latest_frame = collector.get_latest_frame("test-agent")
+    assert latest_frame is not None
+    assert latest_frame.agent_id == "test-agent"
