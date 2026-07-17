@@ -17,7 +17,7 @@ The Constellation-Class Command & Control (C2) environment. Modeled after satell
 
 2. Install the project in editable mode so the `singularity` CLI is mapped:
    ```powershell
-   pip install -e .
+   uv pip install -e .
    ```
 
 ## Using the CLI
