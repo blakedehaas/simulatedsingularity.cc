@@ -26,6 +26,10 @@ from singularity.core.agent_registry import (
     get_all_agents,
     initialize_constellation,
 )
+import singularity.agents  # Trigger @register_agent decorators
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env variables (e.g. GOOGLE_API_KEY)
 from singularity.ground_control.components import (
     build_constellation_overview,
     build_heartbeat_indicator,
