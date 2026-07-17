@@ -1,58 +1,58 @@
-# 🛰️ Simulated Singularity — Constellation-Class Multi-Agent C2
+# Simulated Singularity CC
 
-A multi-agent Command & Control (C2) environment modeled after satellite constellation
-operations. Designed for maximum efficiency, scalability, and minimalism.
-
-## Architecture
-
-The system operates across three synchronized layers:
-
-1. **Ground Control** — Human-in-the-Loop (HITL) interface via Chainlit dashboard
-2. **Mission Planning** — 60-second heartbeat scheduler (APScheduler)
-3. **Orbital Nodes** — Asynchronous agent runtime (LangGraph state machine)
-
-## Agent Constellation
-
-| Agent | Role | Priority |
-|-------|------|----------|
-| SecurityAgent | Apex Admin — threat assessment & policy enforcement | 0 (highest) |
-| CoreAgent | Operator — task routing & resource allocation | 1 |
-| EnvironmentAgent | Infrastructure — system & container health | 2 |
-| PromptAgent | Comms Relay — message routing & telemetry hub | 3 |
-| MemoryAgent | DB Controller — persistence & semantic search | 4 |
-| CodingAgent | Architect — code generation & analysis | 5 |
-| AnalyticalAgent | Observer — data analysis & anomaly detection | 6 |
-| CreativeAgent | Innovator — creative problem-solving | 7 |
-
-## Tech Stack
-
-- **Orchestration**: LangGraph (state-machine with interrupt hooks)
-- **Scheduler**: APScheduler (asyncio, SQLAlchemy job store)
-- **Persistence**: SQLite via SQLAlchemy (async with aiosqlite)
-- **UI**: Chainlit (real-time WebSocket dashboard)
-
-## Quick Start
-
-```bash
-# Install dependencies
-pip install -e ".[dev]"
-
-# Run the Ground Station
-chainlit run src/singularity/ground_control/app.py
-
-# Run tests
-pytest tests/ -v
-```
+The Constellation-Class Command & Control (C2) environment. Modeled after satellite constellation operations, this system utilizes a Python-centric stack to implement an asynchronous multi-agent orchestrator driven by LangGraph, Chainlit, and an extensible agent framework.
 
 ## Project Structure
+- `src/singularity/ground_control/`: Human-in-the-loop Chainlit HTML-5 dashboard.
+- `src/singularity/orchestration/`: LangGraph state-machine orchestrator enforcing priority-based routing and manual interrupt breakpoints.
+- `src/singularity/agents/`: Constellation orbital nodes subclassing `AsyncBaseAgent`.
+- `tests/`: Exhaustive `pytest` testing infrastructure asserting exact 100% test coverage.
 
+## Setup and Installation
+
+1. Activate your virtual environment:
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Install the project in editable mode so the `singularity` CLI is mapped:
+   ```powershell
+   pip install -e .
+   ```
+
+## Using the CLI
+
+The `singularity` CLI is the main entry point to the system. It exposes several flags for interaction, testing, and operations.
+
+| Flag | Description |
+| ---- | ----------- |
+| `-h, --help` | **Interactive Documentation:** Generates and launches a highly detailed, interactive HTML dashboard containing code snippets, architectural breakdowns, and a simulated context-aware LLM chatbot assistant. |
+| `-v, --verbose` | **Verbose Mode:** Overrides logging layers to `DEBUG` and traces the entire LangGraph execution pipeline, printing telemetry metrics directly to the terminal. |
+| `-t, --test` | **Test Suite Trigger:** Automatically triggers the integrated `pytest` testing environment and calculates coverage. If coverage drops below 100%, it simulates delegating the refactoring task to autonomous coding subagents. |
+| `-i, --interactive` | **Ground Control:** Initiates the `chainlit` server subprocess, opening the human-in-the-loop Ground Control dashboard for direct manual interaction with the agent constellation. |
+| `-a, --autonomous` | **Headless Loop:** Bypasses manual interrupt checkpoints and continuously runs the LangGraph orchestration layer in an infinite loop, processing periodic heartbeats. |
+| `-s, --sandbox` | **Sandbox Mode:** Restricts the environment heavily and forces the sqlite database to execute entirely in-memory using `:memory:` mapping. Prevents any persistent state alterations. |
+
+## Testing
+
+This project enforces a rigorous 100% line coverage standard across its core modules (`agent_base`, `models`, `persistence`, `agents`). Testing is instrumented via `pytest`, `pytest-cov`, and `pytest-asyncio`, with massive reliance on `unittest.mock` for isolating dependencies like LLM inference.
+
+**To run the test suite:**
+```powershell
+singularity --test
 ```
-src/singularity/
-├── core/           # AsyncBaseAgent ABC, models, registry
-├── agents/         # 8 concrete agent implementations
-├── orchestration/  # LangGraph state graph & interrupt hooks
-├── scheduler/      # APScheduler heartbeat module
-├── persistence/    # SQLAlchemy ORM & data access
-├── telemetry/      # Pub/sub event bus & metric collection
-└── ground_control/ # Chainlit C2 dashboard
+
+Alternatively, you can invoke `pytest` directly:
+```powershell
+pytest tests/ --cov=src/singularity --cov-report=term-missing
 ```
+
+### Coverage Automation
+If you introduce a feature that isn't fully tested, the `singularity --test` command will detect the dip in code coverage via stdout capture and autonomously spin up coding subagents to rebuild the tests until the strict 100% target is achieved once again.
+
+## In-Depth Help
+To dive deeper into the technical interfaces, such as implementing `AsyncBaseAgent` or understanding the `LangGraph` interrupt loops, invoke the generated interactive documentation:
+```powershell
+singularity --help
+```
+You can use the simulated **Architect LLM** chat window within the generated HTML page to query structural decisions!

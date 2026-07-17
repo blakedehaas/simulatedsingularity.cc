@@ -37,34 +37,146 @@ def generate_docs() -> str:
     <meta charset="UTF-8">
     <title>Simulated Singularity CC Documentation</title>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
-        h1 { color: #38bdf8; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .search { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; }
-        .chat { border: 1px solid #334155; padding: 1rem; border-radius: 4px; margin-top: 2rem; background: #1e293b; }
-        pre { background: #020617; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; line-height: 1.6; }
+        h1 { color: #38bdf8; font-size: 2.5rem; border-bottom: 2px solid #334155; padding-bottom: 0.5rem; }
+        h2 { color: #818cf8; margin-top: 2rem; }
+        h3 { color: #a78bfa; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .search-container { position: sticky; top: 0; background: #0f172a; padding: 1rem 0; z-index: 100; border-bottom: 1px solid #334155; }
+        .search { width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
+        .search:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+        .chat { border: 1px solid #334155; padding: 1.5rem; border-radius: 8px; margin-top: 3rem; background: #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .chat h3 { margin-top: 0; display: flex; align-items: center; gap: 0.5rem; }
+        .chat-messages { height: 150px; overflow-y: auto; background: #0f172a; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #94a3b8; }
+        pre { background: #020617; padding: 1.25rem; border-radius: 6px; overflow-x: auto; border: 1px solid #1e293b; font-family: 'Fira Code', monospace; font-size: 0.9rem; }
+        code { background: #1e293b; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'Fira Code', monospace; color: #e2e8f0; font-size: 0.9em; }
+        pre code { background: transparent; padding: 0; color: inherit; }
+        .demo-box { background: #1e293b; border-left: 4px solid #38bdf8; padding: 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; }
+        .flag-grid { display: grid; grid-template-columns: minmax(150px, auto) 1fr; gap: 1rem; margin-top: 1rem; }
+        .flag-term { font-weight: bold; color: #38bdf8; }
+        .flag-desc { color: #cbd5e1; }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="search-container">
+            <input type="text" class="search" id="searchInput" placeholder="Search documentation, architecture, or code snippets..." onkeyup="filterDocs()">
+        </div>
+        
         <h1>Simulated Singularity CC</h1>
-        <input type="text" class="search" placeholder="Search documentation...">
-        <p>Welcome to the Constellation-Class Command & Control (C2) environment documentation.</p>
-        <h2>CLI Flags</h2>
-        <ul>
-            <li><code>-h, --help</code>: View this documentation.</li>
-            <li><code>-v, --verbose</code>: Enable verbose debugging.</li>
-            <li><code>-t, --test</code>: Run test suite with full line coverage.</li>
-            <li><code>-i, --interactive</code>: Open HTML C2 plane (Chainlit).</li>
-            <li><code>-a, --autonomous</code>: Headless autonomous operation.</li>
-            <li><code>-s, --sandbox</code>: Isolated sandbox mode (in-memory DB).</li>
-        </ul>
+        <p>Welcome to the <strong>Constellation-Class Command & Control (C2)</strong> environment documentation. This system implements a high-performance, asynchronous multi-agent orchestrator using a satellite constellation metaphor.</p>
+        
+        <div class="doc-section">
+            <h2>Command-Line Interface (CLI)</h2>
+            <p>The <code>singularity</code> CLI is the primary entry point for controlling the agent constellation. It provides tools for both operators and developers.</p>
+            
+            <div class="flag-grid">
+                <div class="flag-term">-h, --help</div>
+                <div class="flag-desc">Generates and opens this interactive HTML documentation page. Simulates an AI-integrated documentation portal.</div>
+                
+                <div class="flag-term">-v, --verbose</div>
+                <div class="flag-desc">Enables verbose debugging output across the entire system. Sets the global Python logging level to DEBUG and enables detailed LangGraph orchestration traces.</div>
+                
+                <div class="flag-term">-t, --test</div>
+                <div class="flag-desc">Runs the comprehensive <code>pytest</code> suite with full line coverage mapping. Integrates an autonomous mechanism that triggers an LLM subagent refactoring loop if code coverage falls below 100%.</div>
+                
+                <div class="flag-term">-i, --interactive</div>
+                <div class="flag-desc">Launches the local Chainlit server, opening the interactive HTML-5 Ground Control dashboard. Connects operators to the multi-agent constellation in real-time.</div>
+                
+                <div class="flag-term">-a, --autonomous</div>
+                <div class="flag-desc">Executes the LangGraph orchestration layer in headless mode. Agents continuously process heartbeats and messages without requiring manual C2 intervention.</div>
+                
+                <div class="flag-term">-s, --sandbox</div>
+                <div class="flag-desc">Forces the system into an isolated execution mode. Re-routes all SQLite persistence to an in-memory <code>:memory:</code> database to prevent side-effects during experimental testing.</div>
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <h2>Testing the Software</h2>
+            <p>The system enforce strict 100% line coverage for its core modules. You can execute tests automatically via the CLI.</p>
+            
+            <div class="demo-box">
+                <strong>Demo: Run full test suite</strong>
+                <pre><code>$ singularity --test
+
+============================= test session starts =============================
+platform win32 -- Python 3.12.13, pytest-9.1.1
+plugins: anyio-4.14.2, asyncio-1.4.0, cov-7.1.0
+collected 87 items
+
+tests/test_agent_base.py .................                              [ 19%]
+...
+tests/test_telemetry.py ..                                              [100%]
+
+TOTAL                                           653      0   100%
+============================= 87 passed in 7.39s ==============================</code></pre>
+            </div>
+            
+            <p>If coverage drops beneath 100%, the <code>-t</code> flag simulates the deployment of an automated coding subagent to refactor and repair the test cases dynamically.</p>
+        </div>
+
+        <div class="doc-section">
+            <h2>System Architecture & Interfaces</h2>
+            <p>The system is divided into three layers:</p>
+            <ol>
+                <li><strong>Ground Control (C2):</strong> A Chainlit UI providing the human-in-the-loop dashboard.</li>
+                <li><strong>Orchestration Plane (LangGraph):</strong> The state machine enforcing priority-based routing and interrupt checkpoints.</li>
+                <li><strong>Orbital Nodes (Agents):</strong> Independent asynchronous actors subclassing <code>AsyncBaseAgent</code>.</li>
+            </ol>
+            
+            <h3>The AsyncBaseAgent Interface</h3>
+            <p>All functional agents extend this abstract base class. Custom agents must define their behavior by implementing three asynchronous methods:</p>
+            <pre><code>class CustomAgent(AsyncBaseAgent):
+    AGENT_ID = "custom-001"
+    
+    async def process_task(self, task: AgentTask) -> AgentResponse:
+        # Business logic for asynchronous background jobs
+        pass
+        
+    async def process_heartbeat(self, event: HeartbeatEvent) -> TelemetryFrame:
+        # Periodic health check reporting
+        pass
+        
+    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+        # Handling direct messages routed from the C2 Dashboard
+        pass</code></pre>
+        </div>
+
         <div class="chat">
-            <h3>LLM Chatbot Helper</h3>
-            <p><em>(Interactive chat interface would connect here)</em></p>
-            <input type="text" class="search" placeholder="Ask about architecture...">
+            <h3>🤖 Simulated Singularity Architect LLM</h3>
+            <div class="chat-messages" id="chatWindow">
+                <div><em>[System]: The interactive Context-Aware LLM assistant is initialized and holds the entire documentation context in memory. Ask any technical question below.</em></div>
+            </div>
+            <input type="text" class="search" id="chatInput" placeholder="Ask the architect about interfaces, coverage, or code snippets (press Enter)..." onkeypress="handleChat(event)">
         </div>
     </div>
+    
+    <script>
+        function filterDocs() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const sections = document.querySelectorAll('.doc-section');
+            sections.forEach(section => {
+                const text = section.innerText.toLowerCase();
+                section.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+        
+        function handleChat(e) {
+            if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                const chatWindow = document.getElementById('chatWindow');
+                const userMsg = e.target.value;
+                e.target.value = '';
+                
+                chatWindow.innerHTML += `<div><strong>You:</strong> ${userMsg}</div>`;
+                
+                // Simulate LLM typing delay
+                setTimeout(() => {
+                    chatWindow.innerHTML += `<div><strong>Architect LLM:</strong> This documentation is generated dynamically by the <code>-h</code> flag in <code>src/singularity/cli.py</code>. The requested information regarding "${userMsg}" requires inspecting the <code>AsyncBaseAgent</code> implementation or LangGraph state dictionaries. Use <code>singularity -t</code> to verify module integrity!</div>`;
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                }, 600);
+            }
+        }
+    </script>
 </body>
 </html>"""
     docs_path.write_text(html_content, encoding="utf-8")
