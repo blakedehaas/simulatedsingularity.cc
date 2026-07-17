@@ -140,6 +140,16 @@ async def on_chat_start() -> None:
     """
     logger.info("Ground Control session starting")
 
+    # Silence annoying Windows asyncio proactor connection lost errors
+    import sys
+    if sys.platform == 'win32':
+        loop = asyncio.get_event_loop()
+        def ignore_win_errors(loop, context):
+            if isinstance(context.get('exception'), ConnectionResetError):
+                return
+            loop.default_exception_handler(context)
+        loop.set_exception_handler(ignore_win_errors)
+
     # 1. Database
     try:
         await init_database()
@@ -191,6 +201,13 @@ async def on_chat_start() -> None:
             name="trigger_heartbeat",
             label="🫀 Manual Heartbeat",
             description="Trigger a manual heartbeat across all agents",
+            payload="trigger_heartbeat",
+        ),
+        Action(
+            name="shutdown_system",
+            label="🛑 Exit System",
+            description="Gracefully shut down the C2 environment",
+            payload="shutdown_system",
         ),
     ]
     await Message(
@@ -274,6 +291,8 @@ async def on_stop() -> None:
         await close_database()
     except Exception:
         logger.exception("Error closing database")
+        
+    await asyncio.sleep(0.1) # allow proactor to finish transport closing
 
     logger.info("Ground Control session stopped")
 
@@ -404,3 +423,26 @@ async def on_trigger_heartbeat(action: Action) -> None:
             content="❌ **Manual heartbeat failed.** Check logs.",
             author="Ground Control",
         ).send()
+
+
+@cl.action_callback("shutdown_system")
+async def on_shutdown_system(action: Action) -> None:
+    """Handle manual system shutdown from the UI."""
+    logger.info("Manual shutdown triggered from UI")
+    await Message(
+        content="🛑 **System Shutting Down**... You may now close this window.",
+        author="Ground Control"
+    ).send()
+    
+    # Trigger stop hooks cleanly
+    await on_stop()
+    
+    import sys
+    import os
+    import signal
+    
+    # Attempt graceful shutdown
+    if sys.platform == 'win32':
+        os.kill(os.getpid(), signal.SIGTERM)
+    else:
+        sys.exit(0)
