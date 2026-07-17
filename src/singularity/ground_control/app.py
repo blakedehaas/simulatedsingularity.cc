@@ -201,13 +201,13 @@ async def on_chat_start() -> None:
             name="trigger_heartbeat",
             label="🫀 Manual Heartbeat",
             description="Trigger a manual heartbeat across all agents",
-            payload="trigger_heartbeat",
+            payload={"action": "trigger_heartbeat"},
         ),
         Action(
             name="shutdown_system",
             label="🛑 Exit System",
             description="Gracefully shut down the C2 environment",
-            payload="shutdown_system",
+            payload={"action": "shutdown_system"},
         ),
     ]
     await Message(
@@ -311,7 +311,7 @@ async def on_approve_action(action: Action) -> None:
     Args:
         action: The Chainlit action containing the interrupt metadata.
     """
-    action_id = action.value
+    action_id = action.value if hasattr(action, "value") and action.value else action.payload.get("value")
     logger.info("Operator APPROVED action %s", action_id)
 
     try:
@@ -353,7 +353,7 @@ async def on_deny_action(action: Action) -> None:
     Args:
         action: The Chainlit action containing the interrupt metadata.
     """
-    action_id = action.value
+    action_id = action.value if hasattr(action, "value") and action.value else action.payload.get("value")
     logger.info("Operator DENIED action %s", action_id)
 
     try:

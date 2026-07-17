@@ -84,12 +84,14 @@ def build_sync_prompt_card(interrupt: InterruptRequest) -> Message:
             label="✅ Approve",
             value=action.action_id,
             description=f"Approve action {action.action_id}",
+            payload={"value": action.action_id},
         ),
         Action(
             name="deny_action",
             label="🚫 Deny",
             value=action.action_id,
             description=f"Deny action {action.action_id}",
+            payload={"value": action.action_id},
         ),
     ]
 
