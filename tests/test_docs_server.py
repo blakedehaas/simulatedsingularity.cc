@@ -373,5 +373,8 @@ async def test_heartbeat_monitor():
 @patch("singularity.docs_server.ChatGoogleGenerativeAI")
 def test_main_execution(mock_llm, mock_run):
     import runpy
-    runpy.run_path("C:/Users/realb/OneDrive/Desktop/Projects/Simulated Singularity/simulated_singularity_cc/src/singularity/docs_server.py", run_name="__main__")
+    from pathlib import Path
+    server_path = Path(__file__).resolve().parent.parent / "src" / "singularity" / "docs_server.py"
+    runpy.run_path(str(server_path), run_name="__main__")
     mock_run.assert_called_once()
+
