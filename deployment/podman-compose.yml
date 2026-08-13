@@ -18,6 +18,8 @@ services:
     volumes:
       - ./data/sqlite:/app/data/sqlite
       - ./data/vector:/app/data/vector
+    env_file:
+      - .env
     networks:
       - singularity_net
     restart: unless-stopped

@@ -27,7 +27,7 @@ async def evaluate_end_condition(client: genai.Client, condition: str, history_t
     try:
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flash-8b",
             contents=prompt,
         )
         text = response.text.strip().upper()
@@ -50,7 +50,7 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
     try:
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flash-8b",
             contents=prompt,
         )
         text = response.text.strip()
@@ -139,7 +139,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 try:
                     response = await asyncio.to_thread(
                         client.models.generate_content,
-                        model="gemini-2.5-flash",
+                        model="gemini-2.5-flash-8b",
                         contents=force_prompt,
                     )
                     reply = response.text.strip()
