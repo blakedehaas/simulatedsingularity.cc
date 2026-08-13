@@ -295,6 +295,9 @@ class SimulationSession(Base):
     messages: Mapped[list[SimulationMessage]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    language_config: Mapped["LanguageSimulationConfig"] = relationship(
+        back_populates="session", uselist=False, cascade="all, delete-orphan"
+    )
 
 class SimulationMessage(Base):
     """Immutable chat history for a simulation session.
@@ -321,3 +324,28 @@ class SimulationMessage(Base):
 
     # Relationships
     session: Mapped[SimulationSession] = relationship(back_populates="messages")
+
+
+class LanguageSimulationConfig(Base):
+    """Configuration for language-based simulation core backend.
+
+    Attributes:
+        id: Primary key — string UUID.
+        session_id: Foreign key to the simulation session.
+        seed_prompt: The initial prompt that starts the simulation.
+        end_state_condition: The condition that evaluates when the simulation ends.
+        agents_config: JSON list of agent configurations (name, system_prompt, etc.).
+    """
+
+    __tablename__ = "language_simulation_configs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("simulation_sessions.id"), nullable=False
+    )
+    seed_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    end_state_condition: Mapped[str] = mapped_column(Text, nullable=False)
+    agents_config: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Relationships
+    session: Mapped[SimulationSession] = relationship(back_populates="language_config")

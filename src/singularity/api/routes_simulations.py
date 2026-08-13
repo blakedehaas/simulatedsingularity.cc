@@ -1,8 +1,18 @@
 import logging
 import uuid
+import datetime
 from typing import Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
+from sqlalchemy.future import select
+
+from singularity.persistence.database import get_session
+from singularity.persistence.models import (
+    SimulationSession,
+    SimulationMessage,
+    LanguageSimulationConfig
+)
+from singularity.core.language_simulation import run_simulation_loop
 
 logger = logging.getLogger(__name__)
 
@@ -12,13 +22,19 @@ class SpawnRequest(BaseModel):
     name: str
     seed: int
 
-# Mock database for the API layer
+class LanguageSpawnRequest(BaseModel):
+    name: str
+    seed: int
+    seed_prompt: str
+    end_state_condition: str
+    agents_config: list[dict[str, Any]]
+
+# Mock database for the API layer (kept for backward compatibility with older code if any)
 _mock_simulations_db: dict[str, dict[str, Any]] = {}
 _mock_messages_db: dict[str, list[dict[str, Any]]] = {}
 
 def log_simulation_message(sim_id: str, sender: str, content: str) -> None:
     """Log a new message to the simulation session."""
-    import datetime
     if sim_id not in _mock_messages_db:
         _mock_messages_db[sim_id] = []
         
@@ -43,12 +59,20 @@ async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
         "active_agents": ["execution_node", "safeguard", "orchestrator"]
     }
     
+    async with get_session() as db:
+        session = SimulationSession(
+            id=sim_id,
+            name=request.name,
+            seed=request.seed,
+            topology_snapshot=snapshot
+        )
+        db.add(session)
+    
     sim_data = {
         "id": sim_id,
         "name": request.name,
         "seed": request.seed,
         "topology_snapshot": snapshot,
-        "created_at": "2026-08-13T12:00:00Z"
     }
     
     _mock_simulations_db[sim_id] = sim_data
@@ -57,28 +81,112 @@ async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
 @router.get("/library")
 async def list_simulations() -> list[dict[str, Any]]:
     """Return a list of all saved simulations."""
-    return list(_mock_simulations_db.values())
+    async with get_session() as db:
+        result = await db.execute(select(SimulationSession))
+        sessions = result.scalars().all()
+        
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "seed": s.seed,
+            "topology_snapshot": s.topology_snapshot,
+            "created_at": s.created_at.isoformat() if s.created_at else None
+        }
+        for s in sessions
+    ]
 
 @router.post("/{sim_id}/reboot")
 async def reboot_simulation(sim_id: str) -> dict[str, Any]:
     """Load a saved topology_snapshot into the active orchestrator."""
-    if sim_id not in _mock_simulations_db:
+    async with get_session() as db:
+        result = await db.execute(select(SimulationSession).where(SimulationSession.id == sim_id))
+        sim_data = result.scalars().first()
+        
+    if not sim_data:
         raise HTTPException(status_code=404, detail="Simulation not found")
         
-    sim_data = _mock_simulations_db[sim_id]
-    
     # Inject into global active orchestrator state (routes_sandbox handles UI state)
     from singularity.api.routes_sandbox import swarm_topology_state
     
-    swarm_topology_state["adjacency_matrix"] = sim_data["topology_snapshot"].get("adjacency_matrix", {})
+    swarm_topology_state["adjacency_matrix"] = sim_data.topology_snapshot.get("adjacency_matrix", {})
     
     logger.info(f"Rebooted simulation {sim_id} into active orchestrator")
-    return {"status": "success", "message": f"Simulation {sim_data['name']} loaded"}
+    return {"status": "success", "message": f"Simulation {sim_data.name} loaded"}
 
 @router.get("/{sim_id}/messages")
 async def get_simulation_messages(sim_id: str) -> list[dict[str, Any]]:
     """Return the chronological chat log for the session."""
-    if sim_id not in _mock_simulations_db:
-        raise HTTPException(status_code=404, detail="Simulation not found")
+    async with get_session() as db:
+        result = await db.execute(
+            select(SimulationMessage)
+            .where(SimulationMessage.session_id == sim_id)
+            .order_by(SimulationMessage.timestamp)
+        )
+        messages = result.scalars().all()
         
-    return _mock_messages_db.get(sim_id, [])
+    return [
+        {
+            "sender": m.sender,
+            "content": m.content,
+            "timestamp": m.timestamp.isoformat() if m.timestamp else None
+        }
+        for m in messages
+    ]
+
+@router.post("/language/spawn")
+async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, Any]:
+    """Create a new language-based simulation session and configuration."""
+    sim_id = str(uuid.uuid4())
+    logger.info(f"Spawning language simulation {request.name} (seed {request.seed})")
+    
+    snapshot = {
+        "active_agents": [agent.get("name") for agent in request.agents_config]
+    }
+    
+    async with get_session() as db:
+        session = SimulationSession(
+            id=sim_id,
+            name=request.name,
+            seed=request.seed,
+            topology_snapshot=snapshot
+        )
+        
+        config = LanguageSimulationConfig(
+            id=str(uuid.uuid4()),
+            session_id=sim_id,
+            seed_prompt=request.seed_prompt,
+            end_state_condition=request.end_state_condition,
+            agents_config=request.agents_config
+        )
+        
+        db.add(session)
+        db.add(config)
+        
+    return {
+        "id": sim_id,
+        "name": request.name,
+        "seed": request.seed,
+        "topology_snapshot": snapshot,
+    }
+
+@router.post("/{sim_id}/start")
+async def start_language_simulation(sim_id: str, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Start the language simulation loop in the background."""
+    async with get_session() as db:
+        result = await db.execute(
+            select(LanguageSimulationConfig).where(LanguageSimulationConfig.session_id == sim_id)
+        )
+        config = result.scalars().first()
+        
+    if not config:
+        raise HTTPException(status_code=404, detail="Language simulation config not found for this session")
+        
+    # We must detach the config instance from the session before passing it to the background task, 
+    # or just use its attributes, as the db session will close. 
+    # A cleaner way is to load it into memory eagerly or expunge it.
+    db.expunge(config)
+        
+    background_tasks.add_task(run_simulation_loop, sim_id, config)
+    
+    return {"status": "started", "sim_id": sim_id}
