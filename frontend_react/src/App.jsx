@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Monetization from './components/Monetization';
-import Dashboard from './components/Dashboard';
+import GridDashboard from './components/GridDashboard';
 import TemporalFork from './components/TemporalFork';
 import DocumentationRAG from './components/DocumentationRAG';
 
@@ -71,7 +71,7 @@ function App() {
         {/* Main Content Area */}
         <main className="flex-1 p-6 overflow-hidden flex flex-col">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<GridDashboard />} />
             <Route path="/temporal" element={<TemporalFork />} />
             <Route path="/docs" element={<DocumentationRAG />} />
             <Route path="/store" element={<Monetization />} />
