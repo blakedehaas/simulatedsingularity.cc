@@ -3,60 +3,45 @@ import { apiClient } from '../api';
 import SwarmVisualizer from './SwarmVisualizer';
 
 const C2Terminal = () => {
-  const [telemetry, setTelemetry] = useState([
-    { id: 'init-1', agent: 'Orchestrator', message: 'System initialization complete.', timestamp: new Date().toISOString() },
-    { id: 'init-2', agent: 'Execution', message: 'Awaiting commands.', timestamp: new Date().toISOString() }
-  ]);
+  const [telemetry, setTelemetry] = useState([]);
   const [interceptActive, setInterceptActive] = useState(false);
   const logEndRef = useRef(null);
 
   useEffect(() => {
-    // Polling simulation
     const interval = setInterval(async () => {
       try {
         const res = await apiClient.get('/telemetry');
-        if (res.data && res.data.length > 0) {
-          setTelemetry(prev => [...res.data, ...prev].slice(0, 100)); // Prepend and limit to 100
+        if (res.data) {
+          setTelemetry(res.data);
+        }
+        
+        const interceptRes = await apiClient.get('/console/intercepts');
+        if (Object.keys(interceptRes.data).length > 0) {
+          setInterceptActive(true);
+        } else {
+          setInterceptActive(false);
         }
       } catch (err) {
-        // Fallback for mock if API is down
-        const mockLog = {
-          id: Date.now().toString(),
-          agent: ['Orchestrator', 'Safeguard', 'Execution'][Math.floor(Math.random() * 3)],
-          message: `Routine diagnostic check at sequence ${Math.floor(Math.random() * 9999)}`,
-          timestamp: new Date().toISOString()
-        };
-        setTelemetry(prev => [mockLog, ...prev].slice(0, 100));
-        
-        // Randomly trigger intercept for demonstration
-        if (Math.random() > 0.95 && !interceptActive) {
-          setInterceptActive(true);
-        }
+        console.error("Telemetry error", err);
       }
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
-  }, [interceptActive]);
+  }, []);
 
   const handleResolve = async (action) => {
     try {
       await apiClient.post('/console/resolve', { action });
     } catch (err) {
-      console.log('Intercept resolved (mock API)');
+      console.error('Intercept resolve error', err);
     }
     setInterceptActive(false);
-    setTelemetry(prev => [{
-      id: Date.now().toString(),
-      agent: 'Safeguard',
-      message: `User ${action.toUpperCase()}D anomaly intervention.`,
-      timestamp: new Date().toISOString()
-    }, ...prev]);
   };
 
   const getAgentColor = (agent) => {
-    switch (agent) {
-      case 'Orchestrator': return 'text-purple-400';
-      case 'Safeguard': return 'text-emerald-400';
-      case 'Execution': return 'text-cyan-400';
+      case 'SYSTEM_AUDIT': return 'text-red-400';
+      case 'ProjectManager': return 'text-purple-400';
+      case 'Developer': return 'text-cyan-400';
+      case 'CodeReviewer': return 'text-emerald-400';
       default: return 'text-gray-400';
     }
   };
@@ -73,9 +58,10 @@ const C2Terminal = () => {
         <div className="glass-panel p-4 mb-2 flex justify-between items-center">
           <h2 className="text-xl font-bold tracking-wider text-gray-200">C2 TERMINAL LOG</h2>
           <div className="flex space-x-4 text-xs">
-            <span className="flex items-center"><div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div> Orchestrator</span>
-            <span className="flex items-center"><div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div> Safeguard</span>
-            <span className="flex items-center"><div className="w-2 h-2 bg-cyan-500 rounded-full mr-2"></div> Execution</span>
+            <span className="flex items-center"><div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div> Manager</span>
+            <span className="flex items-center"><div className="w-2 h-2 bg-cyan-500 rounded-full mr-2"></div> Developer</span>
+            <span className="flex items-center"><div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div> Reviewer</span>
+            <span className="flex items-center"><div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div> SYSTEM_AUDIT</span>
           </div>
         </div>
         

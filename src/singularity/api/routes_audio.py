@@ -38,7 +38,7 @@ async def generate_tts(payload: TTSRequest) -> TTSResponse:
     return TTSResponse(
         status="completed",
         profile=profile,
-        audio_url=f"https://placeholder.url/audio/{payload.agent_id}_{uuid.uuid4().hex[:8]}.mp3"
+        audio_url=f"/api/static/audio/{payload.agent_id}_{uuid.uuid4().hex[:8]}.mp3"
     )
 
 @router.post("/generate/music", response_model=MusicResponse)

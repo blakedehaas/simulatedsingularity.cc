@@ -1,6 +1,11 @@
 import logging
+import json
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from sqlalchemy.future import select
+
+from singularity.persistence.database import get_session
+from singularity.persistence.models import SimulationMessage
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +29,35 @@ class TelemetryLogsResponse(BaseModel):
     offset: int
     total: int
 
-@router.get("/", response_model=ConstellationStatus)
-async def get_status() -> ConstellationStatus:
-    """Get the current constellation status."""
-    logger.debug("Fetching constellation status")
-    return ConstellationStatus(
-        status="ACTIVE",
-        active_nodes=3,
-        uptime="99.99%",
-        agents=["orchestrator", "safeguard", "execution"]
-    )
+@router.get("/")
+async def get_global_telemetry() -> list[dict]:
+    """Get the global telemetry stream (latest simulation messages)."""
+    logger.debug("Fetching global telemetry")
+    async with get_session() as db:
+        result = await db.execute(
+            select(SimulationMessage)
+            .order_by(SimulationMessage.timestamp.desc())
+            .limit(50)
+        )
+        messages = result.scalars().all()
+        
+    logs = []
+    for m in messages:
+        text = m.content
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list) and len(parsed) > 0 and "text" in parsed[0]:
+                text = parsed[0]["text"]
+        except Exception:
+            pass
+            
+        logs.append({
+            "id": str(m.id),
+            "agent": m.sender,
+            "message": text,
+            "timestamp": m.timestamp.isoformat() if m.timestamp else None
+        })
+    return logs
 
 @router.get("/logs", response_model=TelemetryLogsResponse)
 async def get_logs(

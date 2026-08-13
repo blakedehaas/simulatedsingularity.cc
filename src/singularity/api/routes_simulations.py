@@ -36,20 +36,7 @@ class ImportRequest(BaseModel):
     simulation: dict[str, Any]
     history: list[dict[str, Any]]
 
-# Mock database for the API layer (kept for backward compatibility with older code if any)
-_mock_simulations_db: dict[str, dict[str, Any]] = {}
-_mock_messages_db: dict[str, list[dict[str, Any]]] = {}
 
-def log_simulation_message(sim_id: str, sender: str, content: str) -> None:
-    """Log a new message to the simulation session."""
-    if sim_id not in _mock_messages_db:
-        _mock_messages_db[sim_id] = []
-        
-    _mock_messages_db[sim_id].append({
-        "sender": sender,
-        "content": content,
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
-    })
 
 @router.post("/spawn")
 async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
@@ -82,7 +69,6 @@ async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
         "topology_snapshot": snapshot,
     }
     
-    _mock_simulations_db[sim_id] = sim_data
     return sim_data
 
 @router.get("/library")

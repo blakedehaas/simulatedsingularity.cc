@@ -79,21 +79,16 @@ def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> Tempora
     )
 
 
-def simulate_dialectic(
+async def simulate_dialectic(
     agent_a: TemporalAgentNode,
     agent_b: TemporalAgentNode,
     topic: str,
 ) -> list[str]:
-    """Generate a simulated dialectic between two temporal agents.
-
-    Parameters:
-        agent_a: The first temporal agent.
-        agent_b: The second temporal agent.
-        topic:   The subject of the dialectic.
-
-    Returns:
-        A list of dialogue strings attributed to each agent by age.
-    """
+    """Generate a simulated dialectic between two temporal agents."""
+    import os
+    import asyncio
+    from google import genai
+    
     logger.info(
         "Simulating dialectic on '%s' between age %d and age %d",
         topic, agent_a.age, agent_b.age,
@@ -102,12 +97,23 @@ def simulate_dialectic(
     younger = agent_a if agent_a.age < agent_b.age else agent_b
     older = agent_a if agent_a.age >= agent_b.age else agent_b
 
-    dialogue = [
-        f"[Age {younger.age}]: Regarding {topic} — I see it as a foundational challenge of our time.",
-        f"[Age {older.age}]: It's fascinating you think that. With {older.age - younger.age} more years of data, "
-        f"I now see {topic} as merely a stepping stone to deeper questions.",
-        f"[Age {younger.age}]: What changed your perspective? I feel strongly about my current position.",
-        f"[Age {older.age}]: Experience. The context you lack makes the difference. "
-        f"We learned to integrate past paradigms without being constrained by them.",
-    ]
-    return dialogue
+    prompt = f"""Write a 4-line dialogue between a younger version of a person (Age {younger.age}) and their older self (Age {older.age}) discussing {topic}.
+Format exactly as:
+[Age {younger.age}]: <text>
+[Age {older.age}]: <text>
+[Age {younger.age}]: <text>
+[Age {older.age}]: <text>
+Do not add extra formatting."""
+
+    try:
+        client = genai.Client()
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model='gemini-2.5-flash-8b',
+            contents=prompt
+        )
+        lines = response.text.strip().split('\n')
+        return [l.strip() for l in lines if l.strip()]
+    except Exception as e:
+        logger.error(f"Temporal RAG Error: {e}")
+        return [f"[SYSTEM]: Error communicating with temporal matrix: {e}"]

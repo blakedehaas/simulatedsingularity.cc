@@ -12,6 +12,7 @@ from singularity.api.routes_audio import router as audio_router
 from singularity.api.routes_sandbox import router as sandbox_router
 from singularity.api.routes_economy import router as economy_router
 from singularity.api.routes_simulations import router as simulations_router
+from singularity.api.routes_temporal import router as temporal_router
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ app.include_router(audio_router)
 app.include_router(sandbox_router)
 app.include_router(economy_router)
 app.include_router(simulations_router)
+app.include_router(temporal_router)
 
 
 @app.get("/api/health", tags=["Health"])

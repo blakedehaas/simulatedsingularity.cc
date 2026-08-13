@@ -48,4 +48,4 @@ async def upscale_media(payload: UpscaleRequest) -> UpscaleResponse:
 async def export_timeline(payload: ExportRequest) -> ExportResponse:
     """Export a sequence/timeline of media."""
     logger.info("Exporting media timeline")
-    return ExportResponse(download_url="https://placeholder.url/download/timeline.mp4")
+    return ExportResponse(download_url="/api/static/export/timeline.mp4")

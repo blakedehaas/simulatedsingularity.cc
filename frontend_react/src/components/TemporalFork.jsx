@@ -32,30 +32,36 @@ const TemporalFork = () => {
     });
   };
 
-  const initiateDialectic = () => {
+  const initiateDialectic = async () => {
     if (selectedAgents.length !== 2) return;
     setIsSimulating(true);
     setLogs(prev => [...prev, `[SYSTEM] Initiating dialectic between Age ${selectedAgents[0].age} and Age ${selectedAgents[1].age}...`]);
 
     const a1 = selectedAgents[0];
     const a2 = selectedAgents[1];
-    const delta = Math.abs(a1.age - a2.age);
     
-    const dialogue = [
-      { agent: a1, text: `I can't believe what you've compromised on.` },
-      { agent: a2, text: `It's not compromise. It's survival.` },
-      { agent: a1, text: `We used to have principles.` },
-      { agent: a2, text: delta > 10 ? `Principles don't pay the rent.` : `They evolve, just like we did.` }
-    ];
-
-    dialogue.forEach((line, index) => {
-      setTimeout(() => {
-        setLogs(prev => [...prev, `[Age ${line.agent.age}]: ${line.text}`]);
-        if (index === dialogue.length - 1) {
-          setTimeout(() => setIsSimulating(false), 1000);
-        }
-      }, (index + 1) * 1500);
-    });
+    try {
+      const { apiClient } = await import('../api');
+      const res = await apiClient.post('/temporal/dialectic', {
+        age_a: a1.age,
+        age_b: a2.age,
+        topic: "the evolution of our consciousness and principles"
+      });
+      
+      const dialogue = res.data.dialogue || [];
+      dialogue.forEach((line, index) => {
+        setTimeout(() => {
+          setLogs(prev => [...prev, line]);
+          if (index === dialogue.length - 1) {
+            setTimeout(() => setIsSimulating(false), 1000);
+          }
+        }, (index + 1) * 1500);
+      });
+    } catch (err) {
+      console.error("Temporal error", err);
+      setLogs(prev => [...prev, `[SYSTEM] Error communicating with temporal matrix.`]);
+      setIsSimulating(false);
+    }
   };
 
   return (
