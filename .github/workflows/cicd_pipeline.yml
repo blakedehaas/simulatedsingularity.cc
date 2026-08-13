@@ -70,25 +70,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Copy compose file to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          source: "deployment/podman-compose.yml"
-          target: "/home/${{ secrets.PROD_USER }}/"
-
-      - name: Execute deployment commands via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          script: |
-            echo "[SYS.LOG] Pulling latest images..."
-            podman-compose -f /home/${{ secrets.PROD_USER }}/deployment/podman-compose.yml pull
-            echo "[SYS.LOG] Starting services..."
-            podman-compose -f /home/${{ secrets.PROD_USER }}/deployment/podman-compose.yml up -d --remove-orphans
-            echo "[SYS.LOG] Cleaning up unused images..."
+      - name: Setup SSH and Deploy
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_USER: ${{ secrets.PROD_USER }}
+          SSH_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          
+          echo "[SYS.LOG] Copying compose file to server..."
+          scp -i ~/.ssh/deploy_key deployment/podman-compose.yml $SSH_USER@$SSH_HOST:/home/$SSH_USER/
+          
+          echo "[SYS.LOG] Executing deployment on server..."
+          ssh -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST "
+            echo '[SYS.LOG] Pulling latest images...'
+            podman-compose -f /home/$SSH_USER/deployment/podman-compose.yml pull
+            echo '[SYS.LOG] Starting services...'
+            podman-compose -f /home/$SSH_USER/deployment/podman-compose.yml up -d --remove-orphans
+            echo '[SYS.LOG] Cleaning up unused images...'
             podman image prune -a -f
+          "
