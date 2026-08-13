@@ -27,7 +27,7 @@ class LanguageSpawnRequest(BaseModel):
     seed: int
     seed_prompt: str
     end_state_condition: str
-    agents_config: list[dict[str, Any]]
+    nodes_config: list[dict[str, Any]]
     verbose_mode: bool = False
     max_tokens: int | None = None
 
@@ -47,7 +47,7 @@ async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
     # Initialize empty topology
     snapshot = {
         "adjacency_matrix": {},
-        "active_agents": []
+        "active_nodes": []
     }
     
     async with get_session() as db:
@@ -160,7 +160,7 @@ async def export_simulation(sim_id: str) -> dict[str, Any]:
             "max_tokens": getattr(config, 'max_tokens', None) if config else None,
             "seed_prompt": config.seed_prompt if config else "",
             "end_state_condition": config.end_state_condition if config else "",
-            "agents_config": config.agents_config if config else []
+            "nodes_config": config.nodes_config if config else []
         },
         "history": history
     }
@@ -174,10 +174,10 @@ async def import_simulation(request: ImportRequest) -> dict[str, Any]:
     logger.info(f"Importing simulation {sim_id}")
     
     sim_data = request.simulation
-    agents_config = sim_data.get("agents_config", [])
+    nodes_config = sim_data.get("nodes_config", [])
     
     snapshot = {
-        "active_agents": [agent.get("name") for agent in agents_config]
+        "active_nodes": [agent.get("name") for agent in nodes_config]
     }
     
     async with get_session() as db:
@@ -193,7 +193,7 @@ async def import_simulation(request: ImportRequest) -> dict[str, Any]:
             session_id=sim_id,
             seed_prompt=sim_data.get("seed_prompt", ""),
             end_state_condition=sim_data.get("end_state_condition", ""),
-            agents_config=agents_config,
+            nodes_config=nodes_config,
             verbose_mode=sim_data.get("verbose_mode", False),
             max_tokens=sim_data.get("max_tokens", None)
         )
@@ -218,7 +218,7 @@ async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, 
     logger.info(f"Spawning language simulation {request.name} (seed {request.seed})")
     
     snapshot = {
-        "active_agents": [agent.get("name") for agent in request.agents_config]
+        "active_nodes": [agent.get("name") for agent in request.nodes_config]
     }
     
     async with get_session() as db:
@@ -234,7 +234,7 @@ async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, 
             session_id=sim_id,
             seed_prompt=request.seed_prompt,
             end_state_condition=request.end_state_condition,
-            agents_config=request.agents_config,
+            nodes_config=request.nodes_config,
             verbose_mode=request.verbose_mode,
             max_tokens=request.max_tokens
         )

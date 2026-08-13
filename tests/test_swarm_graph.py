@@ -11,7 +11,7 @@ async def test_topology_router_dispatch():
     # Setup mock state
     state = SwarmState(
         messages=[AIMessage(content="Hello world")],
-        active_agents=["agent_a", "agent_b", "agent_c"],
+        active_nodes=["agent_a", "agent_b", "agent_c"],
         adjacency_matrix={
             "agent_a": {"agent_b": 0.9, "agent_c": 0.2},
             "agent_b": {"agent_c": 0.8}

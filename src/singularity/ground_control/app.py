@@ -31,33 +31,33 @@ from singularity.neural_core.node_base import (
     DiagnosticFrame,
 )
 from singularity.neural_core.node_registry import (
-    get_agent,
-    get_all_agents,
+    get_node,
+    get_all_nodes,
     initialize_constellation,
 )
-import singularity.cognitive_nodes  # Trigger @register_agent decorators
+import singularity.cognitive_nodes  # Trigger @register_node decorators
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env variables (e.g. GOOGLE_API_KEY)
 from singularity.ground_control.components import (
     build_constellation_overview,
-    build_heartbeat_indicator,
+    build_pulse_indicator,
     build_sync_prompt_card,
     build_welcome_message,
 )
 from singularity.ground_control.handlers import (
-    format_agent_response,
-    format_telemetry,
-    handle_heartbeat_trigger,
+    format_node_response,
+    format_diagnostics,
+    handle_pulse_trigger,
     handle_sync_prompt_response,
     handle_user_prompt,
 )
 from singularity.memory_vault.database import close_database, init_database
-from singularity.sensorium.collector import TelemetryCollector
+from singularity.sensorium.collector import SensoriumCollector
 from singularity.sensorium.events import (
-    TelemetryEvent,
-    TelemetryEventBus,
-    TelemetryEventType,
+    SensoriumEvent,
+    SensoriumEventBus,
+    SensoriumEventType,
     get_event_bus,
 )
 
@@ -111,12 +111,12 @@ async def websocket_prompts(websocket: WebSocket):
             logger.debug("WebSocket received raw payload: %s", data)
             try:
                 payload = json.loads(data)
-                target_agent = payload.get("targetAgent")
+                target_node = payload.get("targetAgent")
                 prompt_text = payload.get("promptText")
                 if prompt_text:
                     # Forward to the chainlit handler!
-                    logger.info("Direct prompt received from Sensorium UI to %s", target_agent)
-                    await handle_user_prompt(prompt_text, target_agent)
+                    logger.info("Direct prompt received from Sensorium UI to %s", target_node)
+                    await handle_user_prompt(prompt_text, target_node)
             except json.JSONDecodeError:
                 logger.debug("WebSocket payload was not valid JSON.")
     except WebSocketDisconnect:
@@ -155,7 +155,7 @@ def _get_session(key: str, default: Any = None) -> Any:
 # Telemetry event bridge → Chainlit messages
 # ---------------------------------------------------------------------------
 
-async def _on_telemetry_event(event: TelemetryEvent) -> None:
+async def _on_telemetry_event(event: SensoriumEvent) -> None:
     """Bridge telemetry events into Chainlit as streamed messages.
 
     Called by the event bus whenever an interesting telemetry event occurs.
@@ -165,14 +165,14 @@ async def _on_telemetry_event(event: TelemetryEvent) -> None:
     Args:
         event: The telemetry event to display.
     """
-    emoji_map: dict[TelemetryEventType, str] = {
-        TelemetryEventType.HEARTBEAT: "💓",
-        TelemetryEventType.AGENT_RESPONSE: "📡",
-        TelemetryEventType.INTERRUPT_RAISED: "🚨",
-        TelemetryEventType.INTERRUPT_RESOLVED: "✅",
-        TelemetryEventType.TASK_SCHEDULED: "📋",
-        TelemetryEventType.TASK_COMPLETED: "🏁",
-        TelemetryEventType.ERROR: "❌",
+    emoji_map: dict[SensoriumEventType, str] = {
+        SensoriumEventType.HEARTBEAT: "💓",
+        SensoriumEventType.NODE_RESPONSE: "📡",
+        SensoriumEventType.INTERRUPT_RAISED: "🚨",
+        SensoriumEventType.INTERRUPT_RESOLVED: "✅",
+        SensoriumEventType.TASK_SCHEDULED: "📋",
+        SensoriumEventType.TASK_COMPLETED: "🏁",
+        SensoriumEventType.ERROR: "❌",
     }
 
     emoji = emoji_map.get(event.event_type, "📊")
@@ -201,9 +201,9 @@ async def _on_telemetry_event(event: TelemetryEvent) -> None:
             "promptText": content
         }
         # If it's an agent response or interrupt, include specific content
-        if event.event_type == TelemetryEventType.AGENT_RESPONSE and event.data:
+        if event.event_type == SensoriumEventType.NODE_RESPONSE and event.data:
             ws_payload["promptText"] = event.data.get("content", "")
-        elif event.event_type == TelemetryEventType.NOTEPAD_UPDATE and event.data:
+        elif event.event_type == SensoriumEventType.NOTEPAD_UPDATE and event.data:
             # Custom event for notepad
             ws_payload["type"] = "NOTEPAD_UPDATE"
             ws_payload["notepad"] = event.data.get("notepad", "")
@@ -275,17 +275,17 @@ async def on_chat_start() -> None:
 
     # 3. Telemetry collector
     bus = get_event_bus()
-    collector = TelemetryCollector(bus=bus)
+    collector = SensoriumCollector(bus=bus)
     collector.start()
     _store_session("telemetry_collector", collector)
     _store_session("event_bus", bus)
 
     # 4. Subscribe UI bridge for non-heartbeat events (heartbeats are frequent)
-    bus.subscribe(TelemetryEventType.INTERRUPT_RAISED, _on_telemetry_event)
-    bus.subscribe(TelemetryEventType.INTERRUPT_RESOLVED, _on_telemetry_event)
-    bus.subscribe(TelemetryEventType.AGENT_RESPONSE, _on_telemetry_event)
-    bus.subscribe(TelemetryEventType.NOTEPAD_UPDATE, _on_telemetry_event)
-    bus.subscribe(TelemetryEventType.ERROR, _on_telemetry_event)
+    bus.subscribe(SensoriumEventType.INTERRUPT_RAISED, _on_telemetry_event)
+    bus.subscribe(SensoriumEventType.INTERRUPT_RESOLVED, _on_telemetry_event)
+    bus.subscribe(SensoriumEventType.NODE_RESPONSE, _on_telemetry_event)
+    bus.subscribe(SensoriumEventType.NOTEPAD_UPDATE, _on_telemetry_event)
+    bus.subscribe(SensoriumEventType.ERROR, _on_telemetry_event)
 
     # 5. Welcome message
     welcome = build_welcome_message()
@@ -300,7 +300,7 @@ async def on_chat_start() -> None:
         settings = await cl.ChatSettings(
             [
                 Select(
-                    id="target_agent",
+                    id="target_node",
                     label="Direct Agent Communication",
                     values=agent_options,
                     initial_index=0,
@@ -334,9 +334,9 @@ async def setup_agent(settings):
         
     tool = settings.get("tools_menu")
     if tool == "🫀 Manual Heartbeat":
-        await on_trigger_heartbeat(None)
+        await on_trigger_pulse(None)
     
-    target_id = settings.get("target_agent")
+    target_id = settings.get("target_node")
     if target_id and target_id != cl.user_session.get("target_node_id"):
         cl.user_session.set("target_node_id", target_id)
         logger.info("Target agent set to %s", target_id)
@@ -373,8 +373,8 @@ async def on_message(message: cl.Message) -> None:
         await Message(content=display_text, author="Ground Control").send()
 
         # If there are proposed actions requiring approval, show sync prompts
-        if response and response.proposed_actions:
-            for action in response.proposed_actions:
+        if response and response.action_proposals:
+            for action in response.action_proposals:
                 from singularity.neural_core.node_base import C2InterventionRequest
 
                 interrupt = C2InterventionRequest(proposed_action=action)
@@ -400,12 +400,12 @@ async def on_stop() -> None:
     logger.info("Ground Control session stopping")
 
     # Stop telemetry collector
-    collector: TelemetryCollector | None = _get_session("telemetry_collector")
+    collector: SensoriumCollector | None = _get_session("telemetry_collector")
     if collector is not None:
         collector.stop()
 
     # Shut down event bus
-    bus: TelemetryEventBus | None = _get_session("event_bus")
+    bus: SensoriumEventBus | None = _get_session("event_bus")
     if bus is not None:
         await bus.shutdown()
 
@@ -449,10 +449,10 @@ async def on_approve_action(action: Action) -> None:
         ).send()
 
         # Publish resolution event
-        bus: TelemetryEventBus | None = _get_session("event_bus")
+        bus: SensoriumEventBus | None = _get_session("event_bus")
         if bus is not None:
-            await bus.publish(TelemetryEvent(
-                event_type=TelemetryEventType.INTERRUPT_RESOLVED,
+            await bus.publish(SensoriumEvent(
+                event_type=SensoriumEventType.INTERRUPT_RESOLVED,
                 source_node_id="ground_control",
                 data={"action_id": action_id, "resolution": "approved"},
             ))
@@ -491,10 +491,10 @@ async def on_deny_action(action: Action) -> None:
         ).send()
 
         # Publish resolution event
-        bus: TelemetryEventBus | None = _get_session("event_bus")
+        bus: SensoriumEventBus | None = _get_session("event_bus")
         if bus is not None:
-            await bus.publish(TelemetryEvent(
-                event_type=TelemetryEventType.INTERRUPT_RESOLVED,
+            await bus.publish(SensoriumEvent(
+                event_type=SensoriumEventType.INTERRUPT_RESOLVED,
                 source_node_id="ground_control",
                 data={"action_id": action_id, "resolution": "denied"},
             ))
@@ -509,7 +509,7 @@ async def on_deny_action(action: Action) -> None:
 
 
 @cl.action_callback("trigger_heartbeat")
-async def on_trigger_heartbeat(action: Action) -> None:
+async def on_trigger_pulse(action: Action) -> None:
     """Handle a manual heartbeat trigger from the operator.
 
     Dispatches a heartbeat to all agents and publishes the resulting
@@ -521,7 +521,7 @@ async def on_trigger_heartbeat(action: Action) -> None:
     logger.info("Manual heartbeat triggered by operator")
 
     try:
-        heartbeat_result = await handle_heartbeat_trigger()
+        heartbeat_result = await handle_pulse_trigger()
         frames_summary = heartbeat_result.get("frames_collected", 0)
 
         await Message(
@@ -533,10 +533,10 @@ async def on_trigger_heartbeat(action: Action) -> None:
         ).send()
 
         # Publish heartbeat event
-        bus: TelemetryEventBus | None = _get_session("event_bus")
+        bus: SensoriumEventBus | None = _get_session("event_bus")
         if bus is not None:
-            await bus.publish(TelemetryEvent(
-                event_type=TelemetryEventType.HEARTBEAT,
+            await bus.publish(SensoriumEvent(
+                event_type=SensoriumEventType.HEARTBEAT,
                 source_node_id="ground_control",
                 data=heartbeat_result,
             ))

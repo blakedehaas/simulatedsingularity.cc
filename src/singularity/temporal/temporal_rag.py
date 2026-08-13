@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class TemporalAgentNode:
+class TemporalConsciousnessNode:
     """A node representing a temporal consciousness slice of a user.
 
     The agent's RAG retriever is mathematically barred from accessing
@@ -27,7 +27,7 @@ class TemporalAgentNode:
         self.system_prompt = system_prompt
         self.memory_filter = memory_filter
         self.age = age
-        logger.debug("Created TemporalAgentNode for age %d", self.age)
+        logger.debug("Created TemporalConsciousnessNode for age %d", self.age)
 
     def query_past(self, user_query: str, vector_memory: Any) -> str:
         """Query the vector database restricted to this temporal slice.
@@ -50,7 +50,7 @@ class TemporalAgentNode:
         return f"[Age {self.age} Recall] {context_str}"
 
 
-def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> TemporalAgentNode:
+def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> TemporalConsciousnessNode:
     """Create a temporal agent node locked to a specific chronological cutoff.
 
     Parameters:
@@ -58,7 +58,7 @@ def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> Tempora
         user_birth_year: The user's birth year for calculating the cutoff.
 
     Returns:
-        A ``TemporalAgentNode`` restricted to pre-cutoff memories.
+        A ``TemporalConsciousnessNode`` restricted to pre-cutoff memories.
     """
     cutoff_year = user_birth_year + target_age
     memory_filter = {"cutoff_year": cutoff_year}
@@ -72,7 +72,7 @@ def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> Tempora
         "Instantiating temporal agent at age %d (cutoff year %d)",
         target_age, cutoff_year,
     )
-    return TemporalAgentNode(
+    return TemporalConsciousnessNode(
         system_prompt=system_prompt,
         memory_filter=memory_filter,
         age=target_age,
@@ -80,8 +80,8 @@ def instantiate_temporal_agent(target_age: int, user_birth_year: int) -> Tempora
 
 
 async def simulate_dialectic(
-    agent_a: TemporalAgentNode,
-    agent_b: TemporalAgentNode,
+    agent_a: TemporalConsciousnessNode,
+    agent_b: TemporalConsciousnessNode,
     topic: str,
 ) -> list[str]:
     """Generate a simulated dialectic between two temporal agents."""

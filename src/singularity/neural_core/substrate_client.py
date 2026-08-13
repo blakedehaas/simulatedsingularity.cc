@@ -38,7 +38,7 @@ class SubstrateClient:
         self.host = host
         self.port = port
 
-    async def spawn_build_agent(
+    async def spawn_build_container(
         self,
         blueprint: str,
         container_image: str = "genesis-build-env:latest",
@@ -87,7 +87,7 @@ class SubstrateClient:
                 error_message=str(exc),
             )
 
-    async def get_system_telemetry(self) -> dict[str, Any]:
+    async def get_substrate_diagnostics(self) -> dict[str, Any]:
         """Fetch autonomic telemetry from the Go hypervisor daemon."""
         return {
             "cpu_usage_percent": 12.5,

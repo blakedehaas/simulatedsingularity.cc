@@ -16,7 +16,7 @@ from singularity.cognitive_nodes.ethics_node import EthicsNode
 from singularity.cognitive_nodes.synthesis_agent import SynthesisNode
 from singularity.neural_core.node_base import NodeStatus, SynapticTransmission, RiskLevel
 from singularity.neural_core.node_registry import initialize_constellation
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.models import GeminiCognitionModel
 from singularity.neural_core.substrate_client import BuildResult, SubstrateClient
 from singularity.swarm_orchestration.triadic_graph import (
     _INTERRUPT_RISK_THRESHOLD,
@@ -58,8 +58,8 @@ def threat_payload() -> SynapticTransmission:
 
 def test_model_endpoint_mappings():
     """Verify Gemini 3.6 Flash vs 1.5 Pro endpoint assignments per agent role."""
-    flash_model = GemmaChatModel(node_role="safeguard")
-    pro_model = GemmaChatModel(node_role="orchestrator")
+    flash_model = GeminiCognitionModel(node_role="safeguard")
+    pro_model = GeminiCognitionModel(node_role="orchestrator")
     
     assert flash_model.model_name == "gemini-3.6-flash"
     assert pro_model.model_name == "gemini-1.5-pro"
@@ -75,7 +75,7 @@ async def test_safeguard_nominal_scan(sample_payload: SynapticTransmission):
     response = await agent.handle_prompt(sample_payload)
     
     assert response.node_id == "safeguard-001"
-    assert len(response.proposed_actions) == 0
+    assert len(response.action_proposals) == 0
     assert response.telemetry.status == NodeStatus.NOMINAL
     assert "CLEAR" in response.content
 
@@ -86,8 +86,8 @@ async def test_safeguard_threat_detection_triggers_interrupt(threat_payload: Syn
     response = await agent.handle_prompt(threat_payload)
     
     assert response.node_id == "safeguard-001"
-    assert len(response.proposed_actions) == 1
-    action = response.proposed_actions[0]
+    assert len(response.action_proposals) == 1
+    action = response.action_proposals[0]
     assert action.risk_level == RiskLevel.CRITICAL
     assert action.risk_level in _INTERRUPT_RISK_THRESHOLD
     assert "THREAT_DETECTED" in response.content
@@ -152,14 +152,14 @@ async def test_substrate_client_podman_container_execution():
     client = SubstrateClient(host="127.0.0.1", port=50051)
     blueprint = "BUILD_SPEC: create microservice container"
     
-    result: BuildResult = await client.spawn_build_agent(blueprint)
+    result: BuildResult = await client.spawn_build_container(blueprint)
     
     assert result.success is True
     assert result.exit_code == 0
     assert "Build Executor Logs" in result.output_logs
     assert result.build_id.startswith("epoch-")
     
-    telemetry = await client.get_system_telemetry()
+    telemetry = await client.get_substrate_diagnostics()
     assert telemetry["cpu_usage_percent"] > 0
     assert "Podman" in telemetry["podman_version"]
 
@@ -176,10 +176,10 @@ async def test_triadic_graph_nodes():
         "security_verdict": "",
         "route_decision": "",
         "synthesis_output": "",
-        "proposed_actions": [],
+        "action_proposals": [],
         "interrupt_payload": {},
         "memory_summary": "",
-        "heartbeat_sequence": 1,
+        "pulse_sequence": 1,
         "is_interrupted": False,
     }
     
@@ -200,5 +200,5 @@ async def test_triadic_graph_nodes():
     
     # Node 4: Orchestrator Commit
     res4 = await orchestrator_commit(state)
-    assert "heartbeat_sequence" in res4
-    assert res4["heartbeat_sequence"] == 2
+    assert "pulse_sequence" in res4
+    assert res4["pulse_sequence"] == 2

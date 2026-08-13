@@ -18,8 +18,8 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_agent, register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import get_node, register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -39,29 +39,29 @@ _ROUTING_TABLE: dict[str, str] = {
     "alternative": "synthesis-001",
 }
 
-@register_agent
+@register_node
 class OrchestratorNode(CognitiveNode):
     """Node I — The Orchestrator & Chronos Agent (The Brain and Clock).
 
     Triadic command, routing, memory consolidation, and heartbeat clock.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "orchestrator-001"
+    NODE_ID: str = "orchestrator-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Orchestrator Agent",
             node_role="Triadic command, routing, memory consolidation, and heartbeat clock",
             priority=0,
         )
-        self._model = GemmaChatModel(node_role="orchestrator", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="orchestrator", system_prompt=SYSTEM_PROMPT)
         self._routes_processed: int = 0
         self._memory_summaries_count: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("OrchestratorNode initialized — priority 0")
 
@@ -74,7 +74,7 @@ class OrchestratorNode(CognitiveNode):
 
         if target_id and target_id != self.node_id:
             try:
-                target_agent = get_agent(target_id)
+                target_node = get_node(target_id)
                 logger.info("Orchestrator routing payload %s -> %s", payload.payload_id, target_id)
                 
                 forwarded = SynapticTransmission(
@@ -87,7 +87,7 @@ class OrchestratorNode(CognitiveNode):
                         "original_source": payload.source_node_id,
                     },
                 )
-                response = await target_agent.receive_prompt(forwarded)
+                response = await target_node.receive_prompt(forwarded)
                 response.metadata["route_to"] = target_id
                 
                 await self.commit_memory(payload.content, response.content)
@@ -115,7 +115,7 @@ class OrchestratorNode(CognitiveNode):
         )
 
     async def handle_heartbeat(self, heartbeat: SystemPulse) -> DiagnosticFrame:
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         
         if heartbeat.sequence_number > 0 and heartbeat.sequence_number % 10 == 0:
             await self.compress_context()
@@ -128,7 +128,7 @@ class OrchestratorNode(CognitiveNode):
             node_id=self.node_id,
             status=self.status,
             metrics={
-                "heartbeat_count": float(self._last_heartbeat_seq),
+                "pulse_count": float(self._last_pulse_sequence),
                 "memory_summaries_count": float(self._memory_summaries_count),
                 "routes_processed": float(self._routes_processed),
                 "uptime_seconds": round(uptime, 2),
@@ -154,13 +154,13 @@ class OrchestratorNode(CognitiveNode):
                 logger.error("Orchestrator failed to compress context: %s", e)
 
     async def commit_memory(self, input_text: str = "", output_text: str = "") -> None:
-        """Persist memory summary via AgentRepository."""
+        """Persist memory summary via NodeRepository."""
         try:
-            from singularity.memory_vault.repository import AgentRepository
+            from singularity.memory_vault.repository import NodeRepository
             entry = f"Memory Commit - IN: {input_text} | OUT: {output_text}"
-            await AgentRepository.append_scratchpad_log(self.node_id, entry)
+            await NodeRepository.append_scratchpad_log(self.node_id, entry)
         except ImportError:
-            logger.warning("AgentRepository not available for memory commit.")
+            logger.warning("NodeRepository not available for memory commit.")
 
     @staticmethod
     def _resolve_target(content: str) -> str | None:

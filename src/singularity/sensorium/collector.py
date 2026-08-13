@@ -1,6 +1,6 @@
 """Telemetry collector — aggregates agent metrics across the constellation.
 
-Listens on the :class:`TelemetryEventBus` for heartbeat and agent-response
+Listens on the :class:`SensoriumEventBus` for heartbeat and agent-response
 events, accumulates the latest :class:`DiagnosticFrame` per agent, and
 exposes a single-call method to retrieve the full constellation status.
 """
@@ -16,11 +16,11 @@ from singularity.neural_core.node_base import (
     CognitiveNode,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_all_agents
+from singularity.neural_core.node_registry import get_all_nodes
 from singularity.sensorium.events import (
-    TelemetryEvent,
-    TelemetryEventBus,
-    TelemetryEventType,
+    SensoriumEvent,
+    SensoriumEventBus,
+    SensoriumEventType,
     get_event_bus,
 )
 
@@ -32,26 +32,26 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class TelemetryCollector:
+class SensoriumCollector:
     """Aggregates telemetry frames and heartbeat statistics.
 
-    Subscribes to the :class:`TelemetryEventBus` to collect
+    Subscribes to the :class:`SensoriumEventBus` to collect
     :class:`DiagnosticFrame` snapshots emitted by agents and the
     scheduler.  Maintains an in-memory cache of the latest frame
     per agent and a running heartbeat counter.
 
     Attributes:
         _latest_frames: Most recent telemetry frame per agent ID.
-        _heartbeat_count: Total number of heartbeats received.
-        _last_heartbeat_at: Timestamp of the most recent heartbeat.
+        _pulse_count: Total number of heartbeats received.
+        _last_pulse_at: Timestamp of the most recent heartbeat.
         _bus: The event bus this collector is subscribed to.
     """
 
-    def __init__(self, bus: TelemetryEventBus | None = None) -> None:
-        self._bus: TelemetryEventBus = bus or get_event_bus()
+    def __init__(self, bus: SensoriumEventBus | None = None) -> None:
+        self._bus: SensoriumEventBus = bus or get_event_bus()
         self._latest_frames: dict[str, DiagnosticFrame] = {}
-        self._heartbeat_count: int = 0
-        self._last_heartbeat_at: datetime | None = None
+        self._pulse_count: int = 0
+        self._last_pulse_at: datetime | None = None
         self._started: bool = False
 
     # ------------------------------------------------------------------
@@ -64,14 +64,14 @@ class TelemetryCollector:
         Safe to call multiple times; subsequent calls are no-ops.
         """
         if self._started:
-            logger.debug("TelemetryCollector already started — skipping")
+            logger.debug("SensoriumCollector already started — skipping")
             return
 
-        self._bus.subscribe(TelemetryEventType.HEARTBEAT, self._on_heartbeat)
-        self._bus.subscribe(TelemetryEventType.AGENT_RESPONSE, self._on_agent_response)
-        self._bus.subscribe(TelemetryEventType.ERROR, self._on_error)
+        self._bus.subscribe(SensoriumEventType.HEARTBEAT, self._on_heartbeat)
+        self._bus.subscribe(SensoriumEventType.NODE_RESPONSE, self._on_node_response)
+        self._bus.subscribe(SensoriumEventType.ERROR, self._on_error)
         self._started = True
-        logger.info("TelemetryCollector started — listening for events")
+        logger.info("SensoriumCollector started — listening for events")
 
     def stop(self) -> None:
         """Unsubscribe from the event bus.
@@ -82,20 +82,20 @@ class TelemetryCollector:
             return
 
         try:
-            self._bus.unsubscribe(TelemetryEventType.HEARTBEAT, self._on_heartbeat)
-            self._bus.unsubscribe(TelemetryEventType.AGENT_RESPONSE, self._on_agent_response)
-            self._bus.unsubscribe(TelemetryEventType.ERROR, self._on_error)
+            self._bus.unsubscribe(SensoriumEventType.HEARTBEAT, self._on_heartbeat)
+            self._bus.unsubscribe(SensoriumEventType.NODE_RESPONSE, self._on_node_response)
+            self._bus.unsubscribe(SensoriumEventType.ERROR, self._on_error)
         except ValueError:
             logger.debug("Handler already removed during unsubscribe")
 
         self._started = False
-        logger.info("TelemetryCollector stopped")
+        logger.info("SensoriumCollector stopped")
 
     # ------------------------------------------------------------------
     # Event handlers
     # ------------------------------------------------------------------
 
-    async def _on_heartbeat(self, event: TelemetryEvent) -> None:
+    async def _on_heartbeat(self, event: SensoriumEvent) -> None:
         """Handle a heartbeat event from the scheduler.
 
         Updates heartbeat counter and extracts any embedded telemetry
@@ -104,11 +104,11 @@ class TelemetryCollector:
         Args:
             event: The heartbeat telemetry event.
         """
-        self._heartbeat_count += 1
-        self._last_heartbeat_at = event.timestamp
+        self._pulse_count += 1
+        self._last_pulse_at = event.timestamp
         logger.debug(
             "Heartbeat #%d received from %s",
-            self._heartbeat_count,
+            self._pulse_count,
             event.source_node_id,
         )
 
@@ -121,7 +121,7 @@ class TelemetryCollector:
             except Exception:
                 logger.exception("Failed to parse telemetry frame from heartbeat data")
 
-    async def _on_agent_response(self, event: TelemetryEvent) -> None:
+    async def _on_node_response(self, event: SensoriumEvent) -> None:
         """Handle an agent response event carrying a telemetry frame.
 
         Args:
@@ -143,7 +143,7 @@ class TelemetryCollector:
                     event.event_id,
                 )
 
-    async def _on_error(self, event: TelemetryEvent) -> None:
+    async def _on_error(self, event: SensoriumEvent) -> None:
         """Handle an error event and mark the agent's cached status.
 
         Args:
@@ -180,7 +180,7 @@ class TelemetryCollector:
         """
         return self._latest_frames.get(node_id)
 
-    async def collect_live_telemetry(self) -> list[DiagnosticFrame]:
+    async def collect_live_diagnostics(self) -> list[DiagnosticFrame]:
         """Poll every registered agent for a fresh telemetry frame.
 
         Calls :meth:`CognitiveNode.emit_telemetry` on each agent from
@@ -190,7 +190,7 @@ class TelemetryCollector:
             List of freshly collected :class:`DiagnosticFrame` instances.
         """
         frames: list[DiagnosticFrame] = []
-        agents = get_all_agents()
+        agents = get_all_nodes()
 
         for agent in agents:
             try:
@@ -221,8 +221,8 @@ class TelemetryCollector:
         Returns:
             A dictionary containing:
             - ``agents``: per-agent status dicts with name, role, status, metrics.
-            - ``heartbeat_count``: total heartbeats received.
-            - ``last_heartbeat_at``: ISO timestamp of last heartbeat.
+            - ``pulse_count``: total heartbeats received.
+            - ``last_pulse_at``: ISO timestamp of last heartbeat.
             - ``total_agents``: count of registered agents.
             - ``agents_nominal``: count of agents in NOMINAL status.
             - ``agents_error``: count of agents in ERROR status.
@@ -232,7 +232,7 @@ class TelemetryCollector:
         nominal_count = 0
         error_count = 0
 
-        all_agents = get_all_agents()
+        all_agents = get_all_nodes()
         for agent in all_agents:
             cached_frame = self._latest_frames.get(agent.node_id)
             status = cached_frame.status if cached_frame else agent.status
@@ -261,10 +261,10 @@ class TelemetryCollector:
 
         return {
             "agents": agents_info,
-            "heartbeat_count": self._heartbeat_count,
-            "last_heartbeat_at": (
-                self._last_heartbeat_at.isoformat()
-                if self._last_heartbeat_at
+            "pulse_count": self._pulse_count,
+            "last_pulse_at": (
+                self._last_pulse_at.isoformat()
+                if self._last_pulse_at
                 else None
             ),
             "total_agents": len(all_agents),
@@ -274,11 +274,11 @@ class TelemetryCollector:
         }
 
     @property
-    def heartbeat_count(self) -> int:
+    def pulse_count(self) -> int:
         """Total number of heartbeats received since collector start."""
-        return self._heartbeat_count
+        return self._pulse_count
 
     @property
-    def last_heartbeat_at(self) -> datetime | None:
+    def last_pulse_at(self) -> datetime | None:
         """Timestamp of the most recent heartbeat, or ``None``."""
-        return self._last_heartbeat_at
+        return self._last_pulse_at

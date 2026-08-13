@@ -15,7 +15,7 @@ from singularity.neural_core.node_base import (
 from singularity.ground_control.components import (
     build_sync_prompt_card,
     build_constellation_overview,
-    build_heartbeat_indicator,
+    build_pulse_indicator,
     build_welcome_message,
 )
 
@@ -85,14 +85,14 @@ def test_build_constellation_overview():
     assert "⚪" in overview  # fallback emoji
 
 def test_build_heartbeat_indicator():
-    res = build_heartbeat_indicator(0)
+    res = build_pulse_indicator(0)
     assert "NOW" in res
     
-    res = build_heartbeat_indicator(5)
+    res = build_pulse_indicator(5)
     assert "🟡" in res
     assert "5s" in res
     
-    res = build_heartbeat_indicator(15)
+    res = build_pulse_indicator(15)
     assert "🟢" in res
     assert "15s" in res
 

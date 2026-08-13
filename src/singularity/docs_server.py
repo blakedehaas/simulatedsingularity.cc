@@ -245,16 +245,16 @@ async def ping_endpoint():
 async def triadic_heartbeat_api(request: Request):
     """Broadcast a timestamped heartbeat prompt to all 3 triadic agents."""
     from datetime import datetime, timezone
-    from singularity.neural_core.node_registry import initialize_constellation, get_all_agents
-    from singularity.scheduler.heartbeat import HeartbeatScheduler
+    from singularity.neural_core.node_registry import initialize_constellation, get_all_nodes
+    from singularity.scheduler.pulse_scheduler import PulseScheduler
     import singularity.cognitive_nodes
 
-    agents = get_all_agents()
+    agents = get_all_nodes()
     if not agents:
         initialize_constellation()
 
-    scheduler = HeartbeatScheduler()
-    frames = await scheduler.broadcast_triadic_heartbeat()
+    scheduler = PulseScheduler()
+    frames = await scheduler.broadcast_triadic_pulse()
     
     timestamp_iso = datetime.now(timezone.utc).isoformat()
 
@@ -290,13 +290,13 @@ async def agent_prompt_api(request: Request):
             "security_verdict": state.get("security_verdict", "CLEAR"),
             "route_decision": state.get("route_decision", "self_handle"),
             "synthesis_output": state.get("synthesis_output", ""),
-            "proposed_actions": [
+            "action_proposals": [
                 {
                     "action_type": a.action_type,
                     "description": a.description,
                     "risk_level": a.risk_level.value,
                 }
-                for a in state.get("proposed_actions", [])
+                for a in state.get("action_proposals", [])
             ]
         })
     except Exception as e:

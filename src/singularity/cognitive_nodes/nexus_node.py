@@ -22,8 +22,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_agent, get_all_agents, register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import get_node, get_all_nodes, register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ _ROUTING_TABLE: dict[str, str] = {
 }
 
 
-@register_agent
+@register_node
 class NexusNode(CognitiveNode):
     """Priority-1 central router and resource manager.
 
@@ -67,22 +67,22 @@ class NexusNode(CognitiveNode):
     statistics and constellation health.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "core-001"
+    NODE_ID: str = "core-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Core Agent",
             node_role="Central routing, resource allocation, and task delegation",
             priority=1,
         )
-        self._model = GemmaChatModel(node_role="core", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="core", system_prompt=SYSTEM_PROMPT)
         self._prompts_routed: int = 0
         self._delegations: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("NexusNode initialized — priority 1")
 
@@ -110,7 +110,7 @@ class NexusNode(CognitiveNode):
 
         if target_id and target_id != self.node_id:
             try:
-                target_agent = get_agent(target_id)
+                target_node = get_node(target_id)
                 self._delegations += 1
                 logger.info(
                     "Routing payload %s → %s",
@@ -128,7 +128,7 @@ class NexusNode(CognitiveNode):
                         "original_source": payload.source_node_id,
                     },
                 )
-                response = await target_agent.receive_prompt(forwarded)
+                response = await target_node.receive_prompt(forwarded)
                 self.set_status(NodeStatus.NOMINAL)
                 return response
             except KeyError:
@@ -158,7 +158,7 @@ class NexusNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with routing statistics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         active_count = sum(
             1 for s in heartbeat.constellation_summary.values()
             if s in {NodeStatus.NOMINAL, NodeStatus.BUSY}
@@ -183,7 +183,7 @@ class NexusNode(CognitiveNode):
             metrics={
                 "prompts_routed": float(self._prompts_routed),
                 "delegations": float(self._delegations),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Core router operational — dispatching payloads",

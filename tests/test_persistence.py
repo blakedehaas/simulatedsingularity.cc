@@ -10,15 +10,15 @@ import pytest_asyncio
 
 from singularity.memory_vault.database import get_session, init_database, close_database
 from singularity.memory_vault.models import (
-    AgentMemoryRecord,
-    AgentProfileRecord,
+    NodeMemoryRecord,
+    NodeProfileRecord,
     CommunicationLogRecord,
     ExecutionStateRecord,
     ScheduledTaskRecord,
     SyncPromptRecord,
 )
 from singularity.memory_vault.repository import (
-    AgentRepository,
+    NodeRepository,
     LogRepository,
     StateRepository,
     TaskRepository,
@@ -43,7 +43,7 @@ class TestDatabaseEngine:
     async def test_session_auto_commit(self, initialized_db: Path) -> None:
         """Session should auto-commit on clean exit."""
         async with get_session() as session:
-            record = AgentProfileRecord(
+            record = NodeProfileRecord(
                 node_id="test-agent",
                 name="TestNode",
                 role="Testing",
@@ -52,7 +52,7 @@ class TestDatabaseEngine:
 
         # Verify the record was committed
         async with get_session() as session:
-            result = await session.get(AgentProfileRecord, "test-agent")
+            result = await session.get(NodeProfileRecord, "test-agent")
             assert result is not None
             assert result.name == "TestNode"
 
@@ -61,7 +61,7 @@ class TestDatabaseEngine:
         """Session should rollback on exception."""
         try:
             async with get_session() as session:
-                record = AgentProfileRecord(
+                record = NodeProfileRecord(
                     node_id="rollback-test",
                     name="RollbackNode",
                     role="Testing",
@@ -73,7 +73,7 @@ class TestDatabaseEngine:
 
         # Verify the record was NOT committed
         async with get_session() as session:
-            result = await session.get(AgentProfileRecord, "rollback-test")
+            result = await session.get(NodeProfileRecord, "rollback-test")
             assert result is None
 
     @pytest.mark.asyncio
@@ -95,7 +95,7 @@ class TestAgentRepository:
     @pytest.mark.asyncio
     async def test_upsert_creates_profile(self, initialized_db: Path) -> None:
         """upsert_profile should create a new profile."""
-        record = await AgentRepository.upsert_profile(
+        record = await NodeRepository.upsert_profile(
             node_id="sec-001",
             name="FirewallNode",
             role="Apex Admin",
@@ -109,12 +109,12 @@ class TestAgentRepository:
     @pytest.mark.asyncio
     async def test_upsert_updates_existing(self, initialized_db: Path) -> None:
         """upsert_profile should update an existing profile."""
-        await AgentRepository.upsert_profile(
+        await NodeRepository.upsert_profile(
             node_id="sec-001",
             name="FirewallNode",
             role="Apex Admin",
         )
-        updated = await AgentRepository.upsert_profile(
+        updated = await NodeRepository.upsert_profile(
             node_id="sec-001",
             name="SecurityAgentV2",
             role="Apex Admin Enhanced",
@@ -124,27 +124,27 @@ class TestAgentRepository:
     @pytest.mark.asyncio
     async def test_get_profile(self, initialized_db: Path) -> None:
         """get_profile should retrieve by ID."""
-        await AgentRepository.upsert_profile(
+        await NodeRepository.upsert_profile(
             node_id="core-001", name="NexusNode", role="Operator"
         )
-        profile = await AgentRepository.get_profile("core-001")
+        profile = await NodeRepository.get_profile("core-001")
         assert profile is not None
         assert profile.name == "NexusNode"
 
     @pytest.mark.asyncio
     async def test_get_profile_not_found(self, initialized_db: Path) -> None:
         """get_profile should return None for unknown ID."""
-        profile = await AgentRepository.get_profile("nonexistent")
+        profile = await NodeRepository.get_profile("nonexistent")
         assert profile is None
 
     @pytest.mark.asyncio
     async def test_get_all_profiles_ordered(self, initialized_db: Path) -> None:
         """get_all_profiles should return profiles ordered by priority."""
-        await AgentRepository.upsert_profile("b", "B", "Role", priority=10)
-        await AgentRepository.upsert_profile("a", "A", "Role", priority=1)
-        await AgentRepository.upsert_profile("c", "C", "Role", priority=5)
+        await NodeRepository.upsert_profile("b", "B", "Role", priority=10)
+        await NodeRepository.upsert_profile("a", "A", "Role", priority=1)
+        await NodeRepository.upsert_profile("c", "C", "Role", priority=5)
 
-        profiles = await AgentRepository.get_all_profiles()
+        profiles = await NodeRepository.get_all_profiles()
         priorities = [p.priority for p in profiles]
         assert priorities == sorted(priorities)
 
@@ -152,11 +152,11 @@ class TestAgentRepository:
     async def test_save_and_get_memories(self, initialized_db: Path) -> None:
         """save_memory and get_memories should round-trip correctly."""
         # Must create profile first (FK constraint)
-        await AgentRepository.upsert_profile("mem-001", "Memory", "DB Controller")
-        await AgentRepository.save_memory("mem-001", "input1", "output1")
-        await AgentRepository.save_memory("mem-001", "input2", "output2")
+        await NodeRepository.upsert_profile("mem-001", "Memory", "DB Controller")
+        await NodeRepository.save_memory("mem-001", "input1", "output1")
+        await NodeRepository.save_memory("mem-001", "input2", "output2")
 
-        memories = await AgentRepository.get_memories("mem-001")
+        memories = await NodeRepository.get_memories("mem-001")
         assert len(memories) == 2
         # Most recent first
         assert memories[0].input_text == "input2"
@@ -173,7 +173,7 @@ class TestTaskRepository:
     async def test_create_task(self, initialized_db: Path) -> None:
         """create_task should persist a new task."""
         task = await TaskRepository.create_task(
-            target_agent="sec-001",
+            target_node="sec-001",
             prompt_text="Run security scan",
             execute_at=datetime.now(timezone.utc) + timedelta(seconds=60),
         )
@@ -266,14 +266,14 @@ class TestStateRepository:
         """save_state and get_state should round-trip correctly."""
         state = await StateRepository.save_state(
             graph_run_id="run-123",
-            state_json={"messages": [], "current_agent": "sec-001"},
+            state_json={"messages": [], "current_node": "sec-001"},
         )
         assert state.status == "paused"
 
         retrieved = await StateRepository.get_state(state.state_id)
         assert retrieved is not None
         assert retrieved.graph_run_id == "run-123"
-        assert retrieved.state_json["current_agent"] == "sec-001"
+        assert retrieved.state_json["current_node"] == "sec-001"
 
     @pytest.mark.asyncio
     async def test_resolve_state(self, initialized_db: Path) -> None:

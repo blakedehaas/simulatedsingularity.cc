@@ -3,7 +3,7 @@
 Handles persistent storage of agent interactions, semantic search
 across memory banks, and execution state serialization for
 interrupt/resume workflows.  Interfaces with the persistence layer's
-:class:`AgentRepository` to commit and retrieve memory records.
+:class:`NodeRepository` to commit and retrieve memory records.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import SimulatedChatModel
-from singularity.neural_core.models import GemmaChatModel
-from singularity.memory_vault.repository import AgentRepository
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import SimulatedCognitionModel
+from singularity.neural_core.models import GeminiCognitionModel
+from singularity.memory_vault.repository import NodeRepository
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ Your primary role is persistent storage, semantic search, and state serializatio
 When answering prompts, act as the system's historian and archivist. Provide clear, structured information regarding data retrieval, state snapshots, and write-ahead log operations."""
 
 
-@register_agent
+@register_node
 class MemoryNode(CognitiveNode):
     """Priority-4 storage and retrieval specialist.
 
@@ -40,23 +40,23 @@ class MemoryNode(CognitiveNode):
     and state serialization for system recovery.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "memory-001"
+    NODE_ID: str = "memory-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Memory Agent",
             node_role="Persistent storage, semantic search, and state serialization",
             priority=4,
         )
-        self._model = GemmaChatModel(node_role="memory", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="memory", system_prompt=SYSTEM_PROMPT)
         self._writes: int = 0
         self._reads: int = 0
         self._serializations: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("MemoryNode initialized — priority 4")
 
@@ -81,7 +81,7 @@ class MemoryNode(CognitiveNode):
 
         # Persist the interaction
         try:
-            await AgentRepository.save_memory(
+            await NodeRepository.save_memory(
                 node_id=payload.target_node_id,
                 input_text=payload.content,
                 output_text=response_text,
@@ -116,7 +116,7 @@ class MemoryNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with memory operation statistics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         return await self.emit_telemetry()
 
     async def emit_telemetry(self) -> DiagnosticFrame:
@@ -133,7 +133,7 @@ class MemoryNode(CognitiveNode):
                 "writes": float(self._writes),
                 "reads": float(self._reads),
                 "serializations": float(self._serializations),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Memory subsystem nominal — read/write pipeline active",
@@ -158,7 +158,7 @@ class MemoryNode(CognitiveNode):
         """
         self._reads += 1
         try:
-            records = await AgentRepository.get_memories(node_id, limit=limit)
+            records = await NodeRepository.get_memories(node_id, limit=limit)
             return [
                 {
                     "input_text": r.input_text,

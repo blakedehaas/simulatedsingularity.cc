@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
 
 
-class AgentProfileRecord(Base):
+class NodeProfileRecord(Base):
     """Persistent configuration and system prompt for an agent.
 
     Attributes:
@@ -44,7 +44,7 @@ class AgentProfileRecord(Base):
         updated_at: When the profile was last modified.
     """
 
-    __tablename__ = "agent_profiles"
+    __tablename__ = "node_profiles"
 
     node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -60,12 +60,12 @@ class AgentProfileRecord(Base):
     )
 
     # Relationships
-    memories: Mapped[list[AgentMemoryRecord]] = relationship(
+    memories: Mapped[list[NodeMemoryRecord]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
 
 
-class AgentMemoryRecord(Base):
+class NodeMemoryRecord(Base):
     """An agent's input/output interaction log entry.
 
     Attributes:
@@ -76,7 +76,7 @@ class AgentMemoryRecord(Base):
         timestamp: When the interaction occurred.
     """
 
-    __tablename__ = "agent_memories"
+    __tablename__ = "node_memories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     node_id: Mapped[str] = mapped_column(
@@ -89,7 +89,7 @@ class AgentMemoryRecord(Base):
     )
 
     # Relationships
-    agent: Mapped[AgentProfileRecord] = relationship(back_populates="memories")
+    agent: Mapped[NodeProfileRecord] = relationship(back_populates="memories")
 
 
 class ScheduledTaskRecord(Base):
@@ -97,7 +97,7 @@ class ScheduledTaskRecord(Base):
 
     Attributes:
         task_id: Primary key — short UUID.
-        target_agent: ID of the agent (or ``"all"`` for broadcast).
+        target_node: ID of the agent (or ``"all"`` for broadcast).
         prompt_text: The prompt to deliver when the task fires.
         execute_at: Scheduled execution time.
         interval_seconds: Recurrence interval (``0`` for one-shot).
@@ -109,7 +109,7 @@ class ScheduledTaskRecord(Base):
     __tablename__ = "scheduled_tasks"
 
     task_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    target_agent: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_node: Mapped[str] = mapped_column(String(64), nullable=False)
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
     execute_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -226,7 +226,7 @@ class SyncPromptRecord(Base):
         back_populates="sync_prompts"
     )
 
-class AgentScratchpadLog(Base):
+class NodeScratchpadLog(Base):
     """Raw uncompacted context entries for agent scratchpads.
 
     Attributes:
@@ -236,7 +236,7 @@ class AgentScratchpadLog(Base):
         timestamp: When the entry was added.
     """
 
-    __tablename__ = "agent_scratchpad_logs"
+    __tablename__ = "node_scratchpad_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     node_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -253,7 +253,7 @@ class MemorySummaryRecord(Base):
         id: Auto-incrementing primary key.
         node_id: Foreign key or identifier for the agent.
         summary_text: The compacted summary text.
-        heartbeat_sequence: The heartbeat sequence when this was compacted.
+        pulse_sequence: The heartbeat sequence when this was compacted.
         entries_compacted: Number of raw entries compacted.
         timestamp: When the summary was created.
     """
@@ -263,7 +263,7 @@ class MemorySummaryRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     node_id: Mapped[str] = mapped_column(String(64), nullable=False)
     summary_text: Mapped[str] = mapped_column(Text, nullable=False)
-    heartbeat_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    pulse_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     entries_compacted: Mapped[int] = mapped_column(Integer, default=0)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now
@@ -334,7 +334,7 @@ class LanguageSimulationConfig(Base):
         session_id: Foreign key to the simulation session.
         seed_prompt: The initial prompt that starts the simulation.
         end_state_condition: The condition that evaluates when the simulation ends.
-        agents_config: JSON list of agent configurations (name, system_prompt, etc.).
+        nodes_config: JSON list of agent configurations (name, system_prompt, etc.).
     """
 
     __tablename__ = "language_simulation_configs"
@@ -345,7 +345,7 @@ class LanguageSimulationConfig(Base):
     )
     seed_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     end_state_condition: Mapped[str] = mapped_column(Text, nullable=False)
-    agents_config: Mapped[dict] = mapped_column(JSON, nullable=False)
+    nodes_config: Mapped[dict] = mapped_column(JSON, nullable=False)
     verbose_mode: Mapped[bool] = mapped_column(default=False)
     max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

@@ -8,25 +8,25 @@ def test_constellation_state_init():
     
     class MockState(TypedDict):
         messages: list
-        current_agent: str
+        current_node: str
         routing_history: list
-        proposed_actions: list
-        pending_interrupts: list
-        telemetry_frames: dict
-        heartbeat_sequence: int
+        action_proposals: list
+        pending_interventions: list
+        diagnostic_frames: dict
+        pulse_sequence: int
         is_interrupted: bool
 
     state: MockState = {
         "messages": [],
-        "current_agent": "test",
+        "current_node": "test",
         "routing_history": [],
-        "proposed_actions": [],
-        "pending_interrupts": [],
-        "telemetry_frames": {},
-        "heartbeat_sequence": 0,
+        "action_proposals": [],
+        "pending_interventions": [],
+        "diagnostic_frames": {},
+        "pulse_sequence": 0,
         "is_interrupted": False
     }
     
-    assert state["current_agent"] == "test"
+    assert state["current_node"] == "test"
     assert len(state["messages"]) == 0
     assert not state["is_interrupted"]

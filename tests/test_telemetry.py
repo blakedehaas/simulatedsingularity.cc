@@ -2,17 +2,17 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock
 
-from singularity.sensorium.events import TelemetryEventBus, TelemetryEvent, TelemetryEventType
-from singularity.sensorium.collector import TelemetryCollector
+from singularity.sensorium.events import SensoriumEventBus, SensoriumEvent, SensoriumEventType
+from singularity.sensorium.collector import SensoriumCollector
 from singularity.neural_core.node_base import DiagnosticFrame, NodeStatus
 
 @pytest.fixture
 def event_bus():
-    return TelemetryEventBus()
+    return SensoriumEventBus()
 
 @pytest.fixture
 def collector(event_bus):
-    c = TelemetryCollector(bus=event_bus)
+    c = SensoriumCollector(bus=event_bus)
     c.start()
     return c
 
@@ -22,9 +22,9 @@ async def test_event_bus_publish(event_bus):
     async def handler(event):
         received.append(event)
     
-    event_bus.subscribe(TelemetryEventType.HEARTBEAT, handler)
-    event = TelemetryEvent(
-        event_type=TelemetryEventType.HEARTBEAT,
+    event_bus.subscribe(SensoriumEventType.HEARTBEAT, handler)
+    event = SensoriumEvent(
+        event_type=SensoriumEventType.HEARTBEAT,
         source_node_id="test",
         data={"test": "data"}
     )
@@ -42,8 +42,8 @@ async def test_collector_record(collector, event_bus):
         message="Test message"
     )
     
-    event = TelemetryEvent(
-        event_type=TelemetryEventType.AGENT_RESPONSE,
+    event = SensoriumEvent(
+        event_type=SensoriumEventType.NODE_RESPONSE,
         source_node_id="test-agent",
         data={"telemetry": frame.model_dump()}
     )

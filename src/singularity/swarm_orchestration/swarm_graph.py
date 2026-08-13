@@ -21,14 +21,14 @@ def topology_router(state: SwarmState) -> list[Send]:
     # We conditionally dispatch to all active agents that have high affinity.
     for source, targets in state.adjacency_matrix.items():
         for target, weight in targets.items():
-            if weight >= WEIGHT_THRESHOLD and target in state.active_agents:
+            if weight >= WEIGHT_THRESHOLD and target in state.active_nodes:
                 # Dispatching state to the target agent node
                 logger.info(f"Routing to {target} due to weight {weight} from {source}")
                 sends.append(Send(target, state))
                 
-    if not sends and state.active_agents:
+    if not sends and state.active_nodes:
         # Fallback to the first active agent if no strong connections exist
-        fallback = state.active_agents[0]
+        fallback = state.active_nodes[0]
         sends.append(Send(fallback, state))
         
     return sends

@@ -1,4 +1,4 @@
-"""Core tools available to all orbital node agents in the constellation."""
+"""Neural Core tools available to all cognitive nodes in the constellation."""
 
 import logging
 from langchain_core.tools import tool
@@ -7,22 +7,22 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 class WriteNotepadInput(BaseModel):
-    node_id: str = Field(description="The ID of the agent writing to the notepad (e.g., 'core-001').")
+    node_id: str = Field(description="The ID of the cognitive node writing to the notepad (e.g., 'core-001').")
     text: str = Field(description="The text to append to the internal notepad.")
 
 @tool("write_notepad", args_schema=WriteNotepadInput)
 async def write_notepad(node_id: str, text: str) -> str:
-    """Appends text to the agent's internal notepad and pushes it to the UI."""
-    from singularity.sensorium.events import TelemetryEvent, TelemetryEventType, get_event_bus
-    from singularity.neural_core.node_registry import get_agent
+    """Appends text to the cognitive node's private scratchpad and emits a sensorium event."""
+    from singularity.sensorium.events import SensoriumEvent, SensoriumEventType, get_event_bus
+    from singularity.neural_core.node_registry import get_node
     
     try:
-        agent = get_agent(node_id)
+        agent = get_node(node_id)
         agent._scratchpad.append(f"[NOTE] {text}")
         
         bus = get_event_bus()
-        await bus.publish(TelemetryEvent(
-            event_type=TelemetryEventType.NOTEPAD_UPDATE,
+        await bus.publish(SensoriumEvent(
+            event_type=SensoriumEventType.NOTEPAD_UPDATE,
             source_node_id=node_id,
             data={"notepad": text}
         ))
@@ -32,31 +32,31 @@ async def write_notepad(node_id: str, text: str) -> str:
         logger.exception("Failed to write to notepad")
         return f"Error writing to notepad: {e}"
 
-class PromptAgentInput(BaseModel):
-    source_node_id: str = Field(description="The ID of the agent sending the prompt.")
-    target_node_id: str = Field(description="The ID of the agent receiving the prompt (e.g., 'coding-001', 'security-001').")
-    prompt: str = Field(description="The directive or prompt content to send.")
+class TransmissionInput(BaseModel):
+    source_node_id: str = Field(description="The ID of the cognitive node originating the transmission.")
+    target_node_id: str = Field(description="The ID of the cognitive node receiving the transmission (e.g., 'coding-001', 'security-001').")
+    prompt: str = Field(description="The content of the synaptic transmission to send.")
 
-@tool("synapse_node", args_schema=PromptAgentInput)
-async def synapse_node(source_node_id: str, target_node_id: str, prompt: str) -> str:
-    """Sends a direct prompt to another agent in the constellation and returns their response."""
-    from singularity.neural_core.node_registry import get_agent
+@tool("send_transmission", args_schema=TransmissionInput)
+async def send_transmission(source_node_id: str, target_node_id: str, prompt: str) -> str:
+    """Sends a direct synaptic transmission to another cognitive node and returns their cognitive output."""
+    from singularity.neural_core.node_registry import get_node
     from singularity.neural_core.node_base import SynapticTransmission
     
     try:
-        target_agent = get_agent(target_node_id)
+        target_node = get_node(target_node_id)
         payload = SynapticTransmission(
             source_node_id=source_node_id,
             target_node_id=target_node_id,
             content=prompt
         )
         
-        logger.info("Agent %s is directly prompting %s", source_node_id, target_node_id)
-        response = await target_agent.receive_prompt(payload)
+        logger.info("Node %s transmitting to %s", source_node_id, target_node_id)
+        response = await target_node.receive_prompt(payload)
         
         return f"Response from {target_node_id}:\n{response.content}"
     except Exception as e:
-        logger.exception("Failed to prompt agent")
-        return f"Error prompting agent: {e}"
+        logger.exception("Failed to transmit to node")
+        return f"Error transmitting to node: {e}"
 
-CORE_TOOLS = [write_notepad, synapse_node]
+NEURAL_CORE_TOOLS = [write_notepad, send_transmission]

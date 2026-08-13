@@ -20,8 +20,8 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_all_agents, register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import get_all_nodes, register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ When interacting with the user, maintain the persona of a reliable comms backbon
 formatting output cleanly and summarizing relayed messages when requested."""
 
 
-@register_agent
+@register_node
 class SynapseNode(CognitiveNode):
     """Priority-3 communications relay and telemetry aggregator.
 
@@ -39,24 +39,24 @@ class SynapseNode(CognitiveNode):
     and distributes heartbeat events to the constellation.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "prompt-001"
+    NODE_ID: str = "prompt-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Prompt Agent",
             node_role="Message relay, telemetry aggregation, and heartbeat distribution",
             priority=3,
         )
-        self._model = GemmaChatModel(node_role="prompt", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="prompt", system_prompt=SYSTEM_PROMPT)
         self._messages_relayed: int = 0
         self._broadcasts_sent: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
-        self._telemetry_cache: dict[str, DiagnosticFrame] = {}
+        self._diagnostics_cache: dict[str, DiagnosticFrame] = {}
         logger.info("SynapseNode initialized — priority 3")
 
     # ------------------------------------------------------------------
@@ -89,7 +89,7 @@ class SynapseNode(CognitiveNode):
             metadata={
                 "messages_relayed": self._messages_relayed,
                 "broadcasts_sent": self._broadcasts_sent,
-                "cached_telemetry_agents": list(self._telemetry_cache.keys()),
+                "cached_telemetry_agents": list(self._diagnostics_cache.keys()),
             },
         )
 
@@ -105,7 +105,7 @@ class SynapseNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with relay statistics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         self._broadcasts_sent += 1
 
         logger.debug(
@@ -128,8 +128,8 @@ class SynapseNode(CognitiveNode):
             metrics={
                 "messages_relayed": float(self._messages_relayed),
                 "broadcasts_sent": float(self._broadcasts_sent),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
-                "telemetry_cache_size": float(len(self._telemetry_cache)),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
+                "telemetry_cache_size": float(len(self._diagnostics_cache)),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Comms relay operational — message pipeline active",
@@ -149,7 +149,7 @@ class SynapseNode(CognitiveNode):
             A list of :class:`CognitiveOutput` from each agent that
             successfully processed the broadcast.
         """
-        agents = get_all_agents()
+        agents = get_all_nodes()
         responses: list[CognitiveOutput] = []
 
         for agent in agents:
@@ -181,15 +181,15 @@ class SynapseNode(CognitiveNode):
         )
         return responses
 
-    def cache_telemetry(self, frame: DiagnosticFrame) -> None:
+    def cache_diagnostics(self, frame: DiagnosticFrame) -> None:
         """Cache a telemetry frame from another agent.
 
         Args:
             frame: The telemetry frame to cache.
         """
-        self._telemetry_cache[frame.node_id] = frame
+        self._diagnostics_cache[frame.node_id] = frame
 
-    def get_cached_telemetry(self, node_id: str) -> DiagnosticFrame | None:
+    def get_cached_diagnostics(self, node_id: str) -> DiagnosticFrame | None:
         """Retrieve a cached telemetry frame for a given agent.
 
         Args:
@@ -198,4 +198,4 @@ class SynapseNode(CognitiveNode):
         Returns:
             The cached :class:`DiagnosticFrame`, or ``None`` if not found.
         """
-        return self._telemetry_cache.get(node_id)
+        return self._diagnostics_cache.get(node_id)

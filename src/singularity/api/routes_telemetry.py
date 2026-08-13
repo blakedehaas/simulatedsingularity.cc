@@ -17,14 +17,14 @@ class ConstellationStatus(BaseModel):
     uptime: str
     agents: list[str]
 
-class TelemetryLogEntry(BaseModel):
+class DiagnosticLogEntry(BaseModel):
     timestamp: str
     level: str
     message: str
     node_id: str | None = None
 
-class TelemetryLogsResponse(BaseModel):
-    logs: list[TelemetryLogEntry]
+class DiagnosticLogsResponse(BaseModel):
+    logs: list[DiagnosticLogEntry]
     limit: int
     offset: int
     total: int
@@ -59,14 +59,14 @@ async def get_global_telemetry() -> list[dict]:
         })
     return logs
 
-@router.get("/logs", response_model=TelemetryLogsResponse)
+@router.get("/logs", response_model=DiagnosticLogsResponse)
 async def get_logs(
     limit: int = Query(50, description="Max number of logs to return"),
     offset: int = Query(0, description="Number of logs to skip")
-) -> TelemetryLogsResponse:
+) -> DiagnosticLogsResponse:
     """Get paginated telemetry logs."""
     logger.debug(f"Fetching logs with limit={limit}, offset={offset}")
-    return TelemetryLogsResponse(
+    return DiagnosticLogsResponse(
         logs=[],
         limit=limit,
         offset=offset,

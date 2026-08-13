@@ -22,8 +22,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ _HIGH_RISK_ACTIONS: frozenset[str] = frozenset({
 
 from singularity.neural_core.node_base import CognitiveNode
 
-@register_agent
+@register_node
 class FirewallNode(CognitiveNode):
     """Priority-0 sentinel that screens all inbound payloads.
 
@@ -60,22 +60,22 @@ class FirewallNode(CognitiveNode):
     ensuring C2 approval before execution proceeds.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "security-001"
+    NODE_ID: str = "security-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Security Agent",
             node_role="Threat detection, policy enforcement, and access-control sentinel",
             priority=0,
         )
-        self._model = GemmaChatModel(node_role="security", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="security", system_prompt=SYSTEM_PROMPT)
         self._threats_detected: int = 0
         self._payloads_screened: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("FirewallNode initialized — priority 0")
 
@@ -99,7 +99,7 @@ class FirewallNode(CognitiveNode):
         self._payloads_screened += 1
         self.set_status(NodeStatus.BUSY)
 
-        proposed_actions: list[ActionProposal] = []
+        action_proposals: list[ActionProposal] = []
         threat_found = self._detect_threats(payload.content)
 
         if threat_found:
@@ -111,7 +111,7 @@ class FirewallNode(CognitiveNode):
                 parameters={"source": payload.source_node_id},
                 risk_level=RiskLevel.CRITICAL,
             )
-            proposed_actions.append(action)
+            action_proposals.append(action)
             await self.request_interrupt(action)
             logger.warning(
                 "Threat detected in payload %s from %s",
@@ -127,7 +127,7 @@ class FirewallNode(CognitiveNode):
             node_id=self.node_id,
             content=response_text,
             telemetry=telemetry,
-            proposed_actions=proposed_actions,
+            action_proposals=action_proposals,
             metadata={
                 "threat_detected": threat_found,
                 "payloads_screened": self._payloads_screened,
@@ -146,7 +146,7 @@ class FirewallNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with security-specific metrics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
 
         # Flag agents in ERROR state as a security concern
         error_agents = [
@@ -175,7 +175,7 @@ class FirewallNode(CognitiveNode):
             metrics={
                 "threats_detected": float(self._threats_detected),
                 "payloads_screened": float(self._payloads_screened),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Security sentinel active — scanning all payloads",

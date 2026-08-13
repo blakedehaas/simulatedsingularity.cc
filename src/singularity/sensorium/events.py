@@ -25,11 +25,11 @@ logger = logging.getLogger(__name__)
 # Event types
 # ---------------------------------------------------------------------------
 
-class TelemetryEventType(str, enum.Enum):
+class SensoriumEventType(str, enum.Enum):
     """Classification of telemetry events flowing through the event bus."""
 
     HEARTBEAT = "heartbeat"
-    AGENT_RESPONSE = "agent_response"
+    NODE_RESPONSE = "agent_response"
     INTERRUPT_RAISED = "interrupt_raised"
     INTERRUPT_RESOLVED = "interrupt_resolved"
     TASK_SCHEDULED = "task_scheduled"
@@ -52,7 +52,7 @@ def _new_event_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
-class TelemetryEvent(BaseModel):
+class SensoriumEvent(BaseModel):
     """A single telemetry event emitted by a constellation component.
 
     Attributes:
@@ -64,21 +64,21 @@ class TelemetryEvent(BaseModel):
     """
 
     event_id: str = Field(default_factory=_new_event_id)
-    event_type: TelemetryEventType
+    event_type: SensoriumEventType
     source_node_id: str
     data: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=_utc_now)
 
 
 # Type alias for subscriber callbacks
-EventHandler = Callable[[TelemetryEvent], Awaitable[None]]
+EventHandler = Callable[[SensoriumEvent], Awaitable[None]]
 
 
 # ---------------------------------------------------------------------------
 # Event bus singleton
 # ---------------------------------------------------------------------------
 
-class TelemetryEventBus:
+class SensoriumEventBus:
     """Async publish/subscribe event bus for telemetry distribution.
 
     Uses per-subscriber ``asyncio.Queue`` instances so that slow consumers
@@ -93,17 +93,17 @@ class TelemetryEventBus:
     """
 
     def __init__(self, max_queue_size: int = 1024) -> None:
-        self._handlers: dict[TelemetryEventType, list[EventHandler]] = defaultdict(list)
-        self._queues: list[asyncio.Queue[TelemetryEvent | None]] = []
+        self._handlers: dict[SensoriumEventType, list[EventHandler]] = defaultdict(list)
+        self._queues: list[asyncio.Queue[SensoriumEvent | None]] = []
         self._max_queue_size = max_queue_size
         self._running: bool = True
-        logger.info("TelemetryEventBus initialized (queue capacity=%d)", max_queue_size)
+        logger.info("SensoriumEventBus initialized (queue capacity=%d)", max_queue_size)
 
     # ------------------------------------------------------------------
     # Publishing
     # ------------------------------------------------------------------
 
-    async def publish(self, event: TelemetryEvent) -> None:
+    async def publish(self, event: SensoriumEvent) -> None:
         """Broadcast a telemetry event to all matching subscribers.
 
         Dispatches to both registered async handler callbacks and any
@@ -157,7 +157,7 @@ class TelemetryEventBus:
 
     def subscribe(
         self,
-        event_type: TelemetryEventType,
+        event_type: SensoriumEventType,
         handler: EventHandler,
     ) -> None:
         """Register an async callback for a specific event type.
@@ -167,7 +167,7 @@ class TelemetryEventBus:
 
         Args:
             event_type: The event type to listen for.
-            handler: An async callable ``(TelemetryEvent) -> None``.
+            handler: An async callable ``(SensoriumEvent) -> None``.
         """
         self._handlers[event_type].append(handler)
         logger.info(
@@ -178,7 +178,7 @@ class TelemetryEventBus:
 
     def unsubscribe(
         self,
-        event_type: TelemetryEventType,
+        event_type: SensoriumEventType,
         handler: EventHandler,
     ) -> None:
         """Remove a previously registered handler.
@@ -209,8 +209,8 @@ class TelemetryEventBus:
 
     async def stream(
         self,
-        event_types: list[TelemetryEventType] | None = None,
-    ) -> AsyncIterator[TelemetryEvent]:
+        event_types: list[SensoriumEventType] | None = None,
+    ) -> AsyncIterator[SensoriumEvent]:
         """Async generator that yields matching telemetry events.
 
         Creates an internal queue and yields events as they arrive.
@@ -222,9 +222,9 @@ class TelemetryEventBus:
                 is in this list.  ``None`` means yield everything.
 
         Yields:
-            Matching :class:`TelemetryEvent` instances.
+            Matching :class:`SensoriumEvent` instances.
         """
-        queue: asyncio.Queue[TelemetryEvent | None] = asyncio.Queue(
+        queue: asyncio.Queue[SensoriumEvent | None] = asyncio.Queue(
             maxsize=self._max_queue_size,
         )
         self._queues.append(queue)
@@ -251,7 +251,7 @@ class TelemetryEventBus:
         Sends a ``None`` sentinel to every active stream queue so that
         ``stream()`` generators exit cleanly, then clears all handlers.
         """
-        logger.info("Shutting down TelemetryEventBus")
+        logger.info("Shutting down SensoriumEventBus")
         self._running = False
 
         # Signal all stream consumers to exit
@@ -262,7 +262,7 @@ class TelemetryEventBus:
                 pass
 
         self._handlers.clear()
-        logger.info("TelemetryEventBus shutdown complete")
+        logger.info("SensoriumEventBus shutdown complete")
 
     def reset(self) -> None:
         """Reset the bus to a clean state (primarily for testing).
@@ -272,25 +272,25 @@ class TelemetryEventBus:
         self._handlers.clear()
         self._queues.clear()
         self._running = True
-        logger.debug("TelemetryEventBus reset")
+        logger.debug("SensoriumEventBus reset")
 
 
 # ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_bus_instance: TelemetryEventBus | None = None
+_bus_instance: SensoriumEventBus | None = None
 
 
-def get_event_bus() -> TelemetryEventBus:
+def get_event_bus() -> SensoriumEventBus:
     """Return the module-level event bus singleton, creating it on first call.
 
     Returns:
-        The shared :class:`TelemetryEventBus` instance.
+        The shared :class:`SensoriumEventBus` instance.
     """
     global _bus_instance
     if _bus_instance is None:
-        _bus_instance = TelemetryEventBus()
+        _bus_instance = SensoriumEventBus()
     return _bus_instance
 
 
@@ -299,4 +299,4 @@ def reset_event_bus() -> None:
     global _bus_instance
     if _bus_instance is not None:
         _bus_instance.reset()
-    _bus_instance = TelemetryEventBus()
+    _bus_instance = SensoriumEventBus()

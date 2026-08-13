@@ -67,7 +67,7 @@ async def initialized_db(temp_db_path: Path) -> AsyncIterator[Path]:
 class MockNode(CognitiveNode):
     """Minimal concrete agent for testing the ABC contract."""
 
-    AGENT_ID = "mock-001"
+    NODE_ID = "mock-001"
 
     def __init__(
         self,
@@ -84,7 +84,7 @@ class MockNode(CognitiveNode):
             priority=priority,
         )
         self._prompt_count = 0
-        self._heartbeat_count = 0
+        self._pulse_count = 0
 
     async def handle_prompt(self, payload: SynapticTransmission) -> CognitiveOutput:
         """Process a prompt and return a mock response."""
@@ -97,7 +97,7 @@ class MockNode(CognitiveNode):
 
     async def handle_heartbeat(self, heartbeat: SystemPulse) -> DiagnosticFrame:
         """Process a heartbeat and return telemetry."""
-        self._heartbeat_count += 1
+        self._pulse_count += 1
         return await self.emit_telemetry()
 
     async def emit_telemetry(self) -> DiagnosticFrame:
@@ -107,7 +107,7 @@ class MockNode(CognitiveNode):
             status=self.status,
             metrics={
                 "prompts_processed": float(self._prompt_count),
-                "heartbeats_received": float(self._heartbeat_count),
+                "heartbeats_received": float(self._pulse_count),
             },
             message="Mock agent operational",
         )

@@ -145,10 +145,10 @@ class TestAgentResponse:
             node_id="test",
             content="Task completed",
             telemetry=telemetry,
-            proposed_actions=[action],
+            action_proposals=[action],
         )
         assert response.content == "Task completed"
-        assert len(response.proposed_actions) == 1
+        assert len(response.action_proposals) == 1
         assert response.telemetry.node_id == "test"
 
 
@@ -191,7 +191,7 @@ class TestAsyncBaseNode:
         frame = await mock_agent.process_heartbeat(sample_heartbeat)
         assert isinstance(frame, DiagnosticFrame)
         assert frame.node_id == "mock-001"
-        assert mock_agent._heartbeat_count == 2
+        assert mock_agent._pulse_count == 2
 
     @pytest.mark.asyncio
     async def test_process_heartbeat_compaction(self, mock_agent, sample_heartbeat) -> None:
@@ -202,7 +202,7 @@ class TestAsyncBaseNode:
         for i in range(15):
             mock_agent._scratchpad.append(f"Entry {i}")
             
-        mock_agent._heartbeat_count = 9
+        mock_agent._pulse_count = 9
         
         # We need a mock model with a `generate` method returning an object with a `content` attribute
         class DummyResp:
@@ -220,18 +220,18 @@ class TestAsyncBaseNode:
                 raise Exception("API error")
                 
         # Trigger compaction (9 -> 10)
-        with patch("singularity.memory_vault.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+        with patch("singularity.memory_vault.repository.NodeRepository.append_scratchpad_log", new_callable=AsyncMock):
             await mock_agent.process_heartbeat(sample_heartbeat)
             
-        assert mock_agent._heartbeat_count == 1 # 0 from compaction + 1 from handle_heartbeat
+        assert mock_agent._pulse_count == 1 # 0 from compaction + 1 from handle_heartbeat
         assert "[COMPACTED CONTEXT]: condensed summary" in mock_agent._scratchpad[0]
         
         # Test error path
-        mock_agent._heartbeat_count = 9
+        mock_agent._pulse_count = 9
         mock_agent._model = ErrorModel()
-        with patch("singularity.memory_vault.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+        with patch("singularity.memory_vault.repository.NodeRepository.append_scratchpad_log", new_callable=AsyncMock):
             await mock_agent.process_heartbeat(sample_heartbeat)
-        assert mock_agent._heartbeat_count == 1
+        assert mock_agent._pulse_count == 1
 
     @pytest.mark.asyncio
     async def test_emit_telemetry(self, mock_agent) -> None:

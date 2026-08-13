@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def detect_clusters(state: SwarmState) -> list[set[str]]:
     """Find connected components in the adjacency matrix using edges >= 0.5."""
     matrix = state.adjacency_matrix
-    nodes = set(state.active_agents)
+    nodes = set(state.active_nodes)
     
     # Also include nodes present in the matrix
     for s_node in matrix.keys():

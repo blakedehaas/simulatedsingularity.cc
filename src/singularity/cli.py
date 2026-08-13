@@ -136,7 +136,7 @@ TOTAL                                           653      0   100%
             <h3>The CognitiveNode Interface</h3>
             <p>All functional agents extend this abstract base class. Custom agents must define their behavior by implementing three asynchronous methods:</p>
             <pre><code>class CustomNode(CognitiveNode):
-    AGENT_ID = "custom-001"
+    NODE_ID = "custom-001"
     
     async def process_task(self, task: AgentTask) -> CognitiveOutput:
         # Business logic for asynchronous background jobs

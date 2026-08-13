@@ -30,7 +30,7 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     RiskLevel,
 )
-from singularity.neural_core.node_registry import get_agent
+from singularity.neural_core.node_registry import get_node
 from singularity.swarm_orchestration.state import TriadicState
 
 logger = logging.getLogger(__name__)
@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 # Well-known agent IDs used by the graph
 # ---------------------------------------------------------------------------
 
-_SAFEGUARD_AGENT_ID = "safeguard-001"
-_ORCHESTRATOR_AGENT_ID = "orchestrator-001"
-_SYNTHESIS_AGENT_ID = "synthesis-001"
+_ETHICS_NODE_ID = "safeguard-001"
+_ORCHESTRATOR_NODE_ID = "orchestrator-001"
+_SYNTHESIS_NODE_ID = "synthesis-001"
 
 _INTERRUPT_RISK_THRESHOLD: set[RiskLevel] = {RiskLevel.HIGH, RiskLevel.CRITICAL}
 
@@ -58,17 +58,17 @@ async def safeguard_screen(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("🛡️ Safeguard screen — scanning payload")
 
     try:
-        agent = get_agent(_SAFEGUARD_AGENT_ID)
+        agent = get_node(_ETHICS_NODE_ID)
     except KeyError:
         logger.warning(
             "Safeguard agent %r not found — skipping safeguard screen",
-            _SAFEGUARD_AGENT_ID,
+            _ETHICS_NODE_ID,
         )
         return {"security_verdict": "CLEAR"}
 
     payload = SynapticTransmission(
         source_node_id="ground_control",
-        target_node_id=_SAFEGUARD_AGENT_ID,
+        target_node_id=_ETHICS_NODE_ID,
         content=state.get("current_payload", ""),
     )
 
@@ -78,18 +78,18 @@ async def safeguard_screen(state: dict[str, Any]) -> dict[str, Any]:
     interrupt_payload = {}
     is_interrupted = False
     
-    for action in response.proposed_actions:
+    for action in response.action_proposals:
         if action.risk_level in _INTERRUPT_RISK_THRESHOLD:
             logger.warning(
                 "⚠️ HIGH-RISK action proposed by %r: %s (risk=%s)",
-                _SAFEGUARD_AGENT_ID,
+                _ETHICS_NODE_ID,
                 action.description,
                 action.risk_level.value,
             )
             verdict = "THREAT"
             interrupt_payload = {
                 "action_id": action.action_id,
-                "node_id": _SAFEGUARD_AGENT_ID,
+                "node_id": _ETHICS_NODE_ID,
                 "action_type": action.action_type,
                 "description": action.description,
                 "risk_level": action.risk_level.value,
@@ -102,9 +102,9 @@ async def safeguard_screen(state: dict[str, Any]) -> dict[str, Any]:
             break
 
     return {
-        "messages": [AIMessage(content=response.content, name=_SAFEGUARD_AGENT_ID)],
+        "messages": [AIMessage(content=response.content, name=_ETHICS_NODE_ID)],
         "security_verdict": verdict,
-        "proposed_actions": response.proposed_actions,
+        "action_proposals": response.action_proposals,
         "interrupt_payload": interrupt_payload,
         "is_interrupted": is_interrupted,
     }
@@ -115,14 +115,14 @@ async def orchestrator_route(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("⚙️ Orchestrator route — determining next steps")
 
     try:
-        agent = get_agent(_ORCHESTRATOR_AGENT_ID)
+        agent = get_node(_ORCHESTRATOR_NODE_ID)
     except KeyError:
-        logger.warning("Orchestrator agent %r not found", _ORCHESTRATOR_AGENT_ID)
+        logger.warning("Orchestrator agent %r not found", _ORCHESTRATOR_NODE_ID)
         return {"route_decision": "self_handle"}
 
     payload = SynapticTransmission(
-        source_node_id=_SAFEGUARD_AGENT_ID,
-        target_node_id=_ORCHESTRATOR_AGENT_ID,
+        source_node_id=_ETHICS_NODE_ID,
+        target_node_id=_ORCHESTRATOR_NODE_ID,
         content=state.get("current_payload", ""),
     )
 
@@ -130,9 +130,9 @@ async def orchestrator_route(state: dict[str, Any]) -> dict[str, Any]:
     route_decision = response.metadata.get("route_to", "self_handle")
 
     return {
-        "messages": [AIMessage(content=response.content, name=_ORCHESTRATOR_AGENT_ID)],
+        "messages": [AIMessage(content=response.content, name=_ORCHESTRATOR_NODE_ID)],
         "route_decision": route_decision,
-        "proposed_actions": response.proposed_actions,
+        "action_proposals": response.action_proposals,
     }
 
 
@@ -141,23 +141,23 @@ async def synthesis_execute(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("🧠 Synthesis execute — generating output")
 
     try:
-        agent = get_agent(_SYNTHESIS_AGENT_ID)
+        agent = get_node(_SYNTHESIS_NODE_ID)
     except KeyError:
-        logger.warning("Synthesis agent %r not found", _SYNTHESIS_AGENT_ID)
+        logger.warning("Synthesis agent %r not found", _SYNTHESIS_NODE_ID)
         return {"synthesis_output": ""}
 
     payload = SynapticTransmission(
-        source_node_id=_ORCHESTRATOR_AGENT_ID,
-        target_node_id=_SYNTHESIS_AGENT_ID,
+        source_node_id=_ORCHESTRATOR_NODE_ID,
+        target_node_id=_SYNTHESIS_NODE_ID,
         content=state.get("current_payload", ""),
     )
 
     response: CognitiveOutput = await agent.receive_prompt(payload)
 
     return {
-        "messages": [AIMessage(content=response.content, name=_SYNTHESIS_AGENT_ID)],
+        "messages": [AIMessage(content=response.content, name=_SYNTHESIS_NODE_ID)],
         "synthesis_output": response.content,
-        "proposed_actions": response.proposed_actions,
+        "action_proposals": response.action_proposals,
     }
 
 
@@ -166,7 +166,7 @@ async def orchestrator_commit(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("💾 Orchestrator commit — persisting memory")
 
     try:
-        agent = get_agent(_ORCHESTRATOR_AGENT_ID)
+        agent = get_node(_ORCHESTRATOR_NODE_ID)
         # Call commit_memory if available on the agent
         if hasattr(agent, "commit_memory"):
             input_text = state.get("current_payload", "")
@@ -176,7 +176,7 @@ async def orchestrator_commit(state: dict[str, Any]) -> dict[str, Any]:
         pass
 
     return {
-        "heartbeat_sequence": state.get("heartbeat_sequence", 0) + 1,
+        "pulse_sequence": state.get("pulse_sequence", 0) + 1,
     }
 
 
@@ -269,10 +269,10 @@ async def run_triadic_prompt(
         "security_verdict": "",
         "route_decision": "",
         "synthesis_output": "",
-        "proposed_actions": [],
+        "action_proposals": [],
         "interrupt_payload": {},
         "memory_summary": "",
-        "heartbeat_sequence": 0,
+        "pulse_sequence": 0,
         "is_interrupted": False,
     }
 

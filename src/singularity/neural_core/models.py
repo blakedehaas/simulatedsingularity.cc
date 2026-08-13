@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Response templates per agent role
 # ---------------------------------------------------------------------------
 
-_RESPONSE_TEMPLATES: dict[str, dict[str, str]] = {
+_COGNITION_TEMPLATES: dict[str, dict[str, str]] = {
     "security": {
         "threat": (
             "⚠️ THREAT DETECTED — Initiating containment protocol. "
@@ -173,7 +173,7 @@ _RESPONSE_TEMPLATES: dict[str, dict[str, str]] = {
 }
 
 
-class SimulatedChatModel:
+class SimulatedCognitionModel:
     """Deterministic keyword-driven chat model for development and testing.
 
     Generates contextually appropriate responses based on the agent's role
@@ -191,8 +191,8 @@ class SimulatedChatModel:
     ) -> None:
         self.node_role = node_role.lower()
         self.response_delay = response_delay
-        self._templates = _RESPONSE_TEMPLATES.get(
-            self.node_role, _RESPONSE_TEMPLATES["core"]
+        self._templates = _COGNITION_TEMPLATES.get(
+            self.node_role, _COGNITION_TEMPLATES["core"]
         )
 
     async def generate(self, prompt_text: str) -> str:
@@ -240,13 +240,13 @@ class SimulatedChatModel:
 
     def __repr__(self) -> str:
         return (
-            f"<SimulatedChatModel role={self.node_role!r} "
+            f"<SimulatedCognitionModel role={self.node_role!r} "
             f"delay={self.response_delay}s>"
         )
 
 import datetime
 
-class GemmaChatModel:
+class GeminiCognitionModel:
     """Google GenAI LLM interface for Gemma/Gemini models."""
 
     def __init__(
@@ -256,7 +256,7 @@ class GemmaChatModel:
         system_prompt: str = "You are a helpful AI assistant.",
         tools: list[Any] | None = None,
     ) -> None:
-        from singularity.neural_core.tools import CORE_TOOLS
+        from singularity.neural_core.tools import NEURAL_CORE_TOOLS
         
         self.node_role = node_role
         if model_name is None:
@@ -269,9 +269,9 @@ class GemmaChatModel:
             self.model_name = model_name
 
         self.system_prompt = system_prompt
-        self.tools = tools if tools is not None else CORE_TOOLS
+        self.tools = tools if tools is not None else NEURAL_CORE_TOOLS
         self._tools_map = {t.name: t for t in self.tools}
-        self._fallback_model = SimulatedChatModel(node_role=self.node_role)
+        self._fallback_cognition = SimulatedCognitionModel(node_role=self.node_role)
         self._llm = None
         try:
             import os
@@ -319,9 +319,9 @@ class GemmaChatModel:
                 
                 return "Error: Exceeded maximum tool call iterations."
             except Exception as e:
-                logger.warning("GenAI API call failed (%s) — using SimulatedChatModel fallback", e)
-                return await self._fallback_model.generate(prompt_text)
-        return await self._fallback_model.generate(prompt_text)
+                logger.warning("GenAI API call failed (%s) — using SimulatedCognitionModel fallback", e)
+                return await self._fallback_cognition.generate(prompt_text)
+        return await self._fallback_cognition.generate(prompt_text)
 
     def generate_sync(self, prompt_text: str) -> str:
         if self._llm:
@@ -350,6 +350,6 @@ class GemmaChatModel:
                         
                 return "Error: Exceeded maximum tool call iterations."
             except Exception as e:
-                logger.warning("GenAI API call failed (%s) — using SimulatedChatModel fallback", e)
-                return self._fallback_model.generate_sync(prompt_text)
-        return self._fallback_model.generate_sync(prompt_text)
+                logger.warning("GenAI API call failed (%s) — using SimulatedCognitionModel fallback", e)
+                return self._fallback_cognition.generate_sync(prompt_text)
+        return self._fallback_cognition.generate_sync(prompt_text)

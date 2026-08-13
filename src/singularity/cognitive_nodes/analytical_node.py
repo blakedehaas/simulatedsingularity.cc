@@ -21,8 +21,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ Your primary role is pattern recognition, anomaly detection, and metric aggregat
 When responding to a prompt, analyze the data objectively, calculate probabilities or trends, and identify potential anomalies in system behavior."""
 
 
-@register_agent
+@register_node
 class AnalyticalNode(CognitiveNode):
     """Priority-6 data analysis and anomaly detection engine.
 
@@ -39,23 +39,23 @@ class AnalyticalNode(CognitiveNode):
     provides quantitative insights for the constellation.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "analytical-001"
+    NODE_ID: str = "analytical-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Analytical Agent",
             node_role="Pattern recognition, anomaly detection, and metric aggregation",
             priority=6,
         )
-        self._model = GemmaChatModel(node_role="analytical", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="analytical", system_prompt=SYSTEM_PROMPT)
         self._patterns_detected: int = 0
         self._anomalies_flagged: int = 0
         self._reports_generated: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("AnalyticalNode initialized — priority 6")
 
@@ -78,7 +78,7 @@ class AnalyticalNode(CognitiveNode):
         """
         self.set_status(NodeStatus.BUSY)
 
-        proposed_actions: list[ActionProposal] = []
+        action_proposals: list[ActionProposal] = []
         content_lower = payload.content.lower()
 
         if "anomaly" in content_lower or "deviation" in content_lower:
@@ -93,7 +93,7 @@ class AnalyticalNode(CognitiveNode):
                 },
                 risk_level=RiskLevel.HIGH,
             )
-            proposed_actions.append(action)
+            action_proposals.append(action)
             logger.warning(
                 "Anomaly flagged in payload %s — escalating", payload.payload_id
             )
@@ -112,7 +112,7 @@ class AnalyticalNode(CognitiveNode):
             node_id=self.node_id,
             content=response_text,
             telemetry=telemetry,
-            proposed_actions=proposed_actions,
+            action_proposals=action_proposals,
             metadata={
                 "patterns_detected": self._patterns_detected,
                 "anomalies_flagged": self._anomalies_flagged,
@@ -132,7 +132,7 @@ class AnalyticalNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with analysis statistics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
 
         non_nominal = [
             aid for aid, status in heartbeat.constellation_summary.items()
@@ -161,7 +161,7 @@ class AnalyticalNode(CognitiveNode):
                 "patterns_detected": float(self._patterns_detected),
                 "anomalies_flagged": float(self._anomalies_flagged),
                 "reports_generated": float(self._reports_generated),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Analytical engine active — monitoring telemetry streams",

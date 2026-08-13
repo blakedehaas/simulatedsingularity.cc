@@ -17,13 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from singularity.memory_vault.database import get_session
 from singularity.memory_vault.models import (
-    AgentMemoryRecord,
-    AgentProfileRecord,
+    NodeMemoryRecord,
+    NodeProfileRecord,
     CommunicationLogRecord,
     ExecutionStateRecord,
     ScheduledTaskRecord,
     SyncPromptRecord,
-    AgentScratchpadLog,
+    NodeScratchpadLog,
     MemorySummaryRecord,
 )
 
@@ -44,7 +44,7 @@ def _utc_now() -> datetime:
 # Agent Repository
 # ---------------------------------------------------------------------------
 
-class AgentRepository:
+class NodeRepository:
     """CRUD operations for agent profiles and interaction memories."""
 
     @staticmethod
@@ -54,7 +54,7 @@ class AgentRepository:
         role: str,
         system_prompt: str = "",
         priority: int = 10,
-    ) -> AgentProfileRecord:
+    ) -> NodeProfileRecord:
         """Create or update an agent profile.
 
         Args:
@@ -65,10 +65,10 @@ class AgentRepository:
             priority: Routing priority.
 
         Returns:
-            The created or updated ``AgentProfileRecord``.
+            The created or updated ``NodeProfileRecord``.
         """
         async with get_session() as session:
-            existing = await session.get(AgentProfileRecord, node_id)
+            existing = await session.get(NodeProfileRecord, node_id)
             if existing is not None:
                 existing.name = name
                 existing.role = role
@@ -77,7 +77,7 @@ class AgentRepository:
                 existing.updated_at = _utc_now()
                 record = existing
             else:
-                record = AgentProfileRecord(
+                record = NodeProfileRecord(
                     node_id=node_id,
                     name=name,
                     role=role,
@@ -88,28 +88,28 @@ class AgentRepository:
             return record
 
     @staticmethod
-    async def get_profile(node_id: str) -> AgentProfileRecord | None:
+    async def get_profile(node_id: str) -> NodeProfileRecord | None:
         """Retrieve an agent profile by ID.
 
         Args:
             node_id: The agent's unique identifier.
 
         Returns:
-            The ``AgentProfileRecord`` if found, otherwise ``None``.
+            The ``NodeProfileRecord`` if found, otherwise ``None``.
         """
         async with get_session() as session:
-            return await session.get(AgentProfileRecord, node_id)
+            return await session.get(NodeProfileRecord, node_id)
 
     @staticmethod
-    async def get_all_profiles() -> list[AgentProfileRecord]:
+    async def get_all_profiles() -> list[NodeProfileRecord]:
         """Retrieve all agent profiles ordered by priority.
 
         Returns:
-            List of all ``AgentProfileRecord`` entries.
+            List of all ``NodeProfileRecord`` entries.
         """
         async with get_session() as session:
             result = await session.execute(
-                select(AgentProfileRecord).order_by(AgentProfileRecord.priority)
+                select(NodeProfileRecord).order_by(NodeProfileRecord.priority)
             )
             return list(result.scalars().all())
 
@@ -118,7 +118,7 @@ class AgentRepository:
         node_id: str,
         input_text: str,
         output_text: str,
-    ) -> AgentMemoryRecord:
+    ) -> NodeMemoryRecord:
         """Record an agent interaction to memory.
 
         Args:
@@ -127,10 +127,10 @@ class AgentRepository:
             output_text: The agent's response.
 
         Returns:
-            The created ``AgentMemoryRecord``.
+            The created ``NodeMemoryRecord``.
         """
         async with get_session() as session:
-            record = AgentMemoryRecord(
+            record = NodeMemoryRecord(
                 node_id=node_id,
                 input_text=input_text,
                 output_text=output_text,
@@ -141,7 +141,7 @@ class AgentRepository:
     @staticmethod
     async def get_memories(
         node_id: str, limit: int = 50
-    ) -> list[AgentMemoryRecord]:
+    ) -> list[NodeMemoryRecord]:
         """Retrieve recent interaction memories for an agent.
 
         Args:
@@ -149,13 +149,13 @@ class AgentRepository:
             limit: Maximum number of records to return.
 
         Returns:
-            List of ``AgentMemoryRecord`` entries, most recent first.
+            List of ``NodeMemoryRecord`` entries, most recent first.
         """
         async with get_session() as session:
             result = await session.execute(
-                select(AgentMemoryRecord)
-                .where(AgentMemoryRecord.node_id == node_id)
-                .order_by(AgentMemoryRecord.timestamp.desc())
+                select(NodeMemoryRecord)
+                .where(NodeMemoryRecord.node_id == node_id)
+                .order_by(NodeMemoryRecord.timestamp.desc())
                 .limit(limit)
             )
             return list(result.scalars().all())
@@ -164,7 +164,7 @@ class AgentRepository:
     async def append_scratchpad_log(
         node_id: str,
         entry_text: str,
-    ) -> AgentScratchpadLog:
+    ) -> NodeScratchpadLog:
         """Append a raw context entry to an agent's scratchpad log.
 
         Args:
@@ -172,10 +172,10 @@ class AgentRepository:
             entry_text: The raw uncompacted text.
 
         Returns:
-            The created ``AgentScratchpadLog``.
+            The created ``NodeScratchpadLog``.
         """
         async with get_session() as session:
-            record = AgentScratchpadLog(
+            record = NodeScratchpadLog(
                 node_id=node_id,
                 entry_text=entry_text,
             )
@@ -192,7 +192,7 @@ class TaskRepository:
 
     @staticmethod
     async def create_task(
-        target_agent: str,
+        target_node: str,
         prompt_text: str,
         execute_at: datetime,
         interval_seconds: int = 0,
@@ -200,7 +200,7 @@ class TaskRepository:
         """Create a new scheduled task.
 
         Args:
-            target_agent: ID of the target agent (or ``"all"``).
+            target_node: ID of the target agent (or ``"all"``).
             prompt_text: The prompt to deliver.
             execute_at: When to execute.
             interval_seconds: Recurrence interval (``0`` for one-shot).
@@ -211,7 +211,7 @@ class TaskRepository:
         async with get_session() as session:
             record = ScheduledTaskRecord(
                 task_id=_short_id(),
-                target_agent=target_agent,
+                target_node=target_node,
                 prompt_text=prompt_text,
                 execute_at=execute_at,
                 interval_seconds=interval_seconds,
@@ -489,7 +489,7 @@ class MemoryRepository:
     async def save_summary(
         node_id: str,
         summary_text: str,
-        heartbeat_sequence: int,
+        pulse_sequence: int,
         entries_compacted: int = 0,
     ) -> MemorySummaryRecord:
         """Save a new memory summary record.
@@ -497,7 +497,7 @@ class MemoryRepository:
         Args:
             node_id: Identifier of the agent.
             summary_text: The compacted text.
-            heartbeat_sequence: Heartbeat sequence number at time of compaction.
+            pulse_sequence: Heartbeat sequence number at time of compaction.
             entries_compacted: Number of scratchpad entries rolled up.
 
         Returns:
@@ -507,7 +507,7 @@ class MemoryRepository:
             record = MemorySummaryRecord(
                 node_id=node_id,
                 summary_text=summary_text,
-                heartbeat_sequence=heartbeat_sequence,
+                pulse_sequence=pulse_sequence,
                 entries_compacted=entries_compacted,
             )
             session.add(record)

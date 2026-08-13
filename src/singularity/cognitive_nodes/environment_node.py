@@ -20,8 +20,8 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ Report on CPU load, memory utilization, network latency, and any degraded contai
 Provide concise operational status updates and infrastructure assessments."""
 
 
-@register_agent
+@register_node
 class EnvironmentNode(CognitiveNode):
     """Priority-2 infrastructure and environment monitor.
 
@@ -40,20 +40,20 @@ class EnvironmentNode(CognitiveNode):
     environment health in response to prompts.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "environment-001"
+    NODE_ID: str = "environment-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Environment Agent",
             node_role="Infrastructure health monitoring and diagnostics",
             priority=2,
         )
-        self._model = GemmaChatModel(node_role="environment", system_prompt=SYSTEM_PROMPT)
-        self._last_heartbeat_seq: int = 0
+        self._model = GeminiCognitionModel(node_role="environment", system_prompt=SYSTEM_PROMPT)
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
 
         # Simulated environment metrics
@@ -110,7 +110,7 @@ class EnvironmentNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with updated environment metrics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
 
         # Simulate small fluctuations
         self._cpu_load = max(0.0, min(100.0, self._cpu_load + random.uniform(-3.0, 3.0)))
@@ -139,7 +139,7 @@ class EnvironmentNode(CognitiveNode):
                 "network_latency_ms": round(self._network_latency_ms, 2),
                 "active_containers": float(self._active_containers),
                 "degraded_containers": float(self._degraded_containers),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Infrastructure monitoring active — all systems nominal",

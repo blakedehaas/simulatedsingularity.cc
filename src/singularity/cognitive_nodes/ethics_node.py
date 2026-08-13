@@ -22,8 +22,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -46,30 +46,30 @@ _HIGH_RISK_ACTIONS: frozenset[str] = frozenset({
 })
 
 
-@register_agent
+@register_node
 class EthicsNode(CognitiveNode):
     """Node II — The Operations & Safeguard Agent (The Gatekeeper).
 
     Security screening, threat detection, and execution freeze enforcement.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "safeguard-001"
+    NODE_ID: str = "safeguard-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Safeguard Agent",
             node_role="Security screening, threat detection, and execution freeze enforcement",
             priority=0,
         )
-        self._model = GemmaChatModel(node_role="security", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="security", system_prompt=SYSTEM_PROMPT)
         self._scans_total: int = 0
         self._threats_detected: int = 0
         self._interrupts_triggered: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         
         # Simulated infra metrics
@@ -83,7 +83,7 @@ class EthicsNode(CognitiveNode):
         self._scans_total += 1
         self.set_status(NodeStatus.BUSY)
 
-        proposed_actions: list[ActionProposal] = []
+        action_proposals: list[ActionProposal] = []
         threat_found = self._detect_threats(payload.content)
         
         if threat_found:
@@ -96,7 +96,7 @@ class EthicsNode(CognitiveNode):
                 parameters={"source": payload.source_node_id},
                 risk_level=RiskLevel.CRITICAL,
             )
-            proposed_actions.append(action)
+            action_proposals.append(action)
             await self.request_interrupt(action)
             logger.warning("Threat detected in payload %s", payload.payload_id)
             verdict_str = json.dumps({"verdict": "THREAT_DETECTED", "threats": ["Matched known threat pattern"]})
@@ -110,7 +110,7 @@ class EthicsNode(CognitiveNode):
             node_id=self.node_id,
             content=verdict_str,
             telemetry=telemetry,
-            proposed_actions=proposed_actions,
+            action_proposals=action_proposals,
             metadata={
                 "threat_detected": threat_found,
                 "scans_total": self._scans_total,
@@ -118,7 +118,7 @@ class EthicsNode(CognitiveNode):
         )
 
     async def handle_heartbeat(self, heartbeat: SystemPulse) -> DiagnosticFrame:
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         
         # Simulate infrastructure metrics fluctuation
         self._cpu_load = max(5.0, min(95.0, self._cpu_load + (time.monotonic() % 5 - 2.5)))

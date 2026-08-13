@@ -12,7 +12,7 @@ from singularity.cognitive_nodes.firewall_node import FirewallNode
 
 @pytest.mark.asyncio
 async def test_all_agents_init():
-    with patch("singularity.neural_core.models.GemmaChatModel"):
+    with patch("singularity.neural_core.models.GeminiCognitionModel"):
         a1 = AnalyticalNode()
         a2 = ArchitectNode()
         a3 = NexusNode()

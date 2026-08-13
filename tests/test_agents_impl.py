@@ -20,14 +20,14 @@ from singularity.neural_core.node_base import (
 
 @pytest.fixture(autouse=True)
 def mock_generate():
-    with patch("singularity.neural_core.models.GemmaChatModel.generate", new_callable=AsyncMock) as mock_gen:
+    with patch("singularity.neural_core.models.GeminiCognitionModel.generate", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = "mocked response"
         yield mock_gen
 
 @pytest.mark.asyncio
 async def test_core_agent():
     agent = NexusNode()
-    assert agent.AGENT_ID == "core-001"
+    assert agent.NODE_ID == "core-001"
     
     # Test process_heartbeat
     hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={"core-001": NodeStatus.NOMINAL})
@@ -41,13 +41,13 @@ async def test_core_agent():
     
     # Test receive_prompt with routing hit but agent not found
     payload_missing = SynapticTransmission(source_node_id="test", target_node_id="core-001", content="threat")
-    with patch("singularity.cognitive_nodes.nexus_node.get_agent", side_effect=KeyError("not found")):
+    with patch("singularity.cognitive_nodes.nexus_node.get_node", side_effect=KeyError("not found")):
         resp_missing = await agent.receive_prompt(payload_missing)
         assert resp_missing.content == "mocked response"
 
     # Test receive_prompt with successful routing
     payload_route = SynapticTransmission(source_node_id="test", target_node_id="core-001", content="threat")
-    with patch("singularity.cognitive_nodes.nexus_node.get_agent") as mock_get_agent:
+    with patch("singularity.cognitive_nodes.nexus_node.get_node") as mock_get_agent:
         mock_target = AsyncMock()
         mock_target.node_id = "security-001"
         mock_target.receive_prompt.return_value = MagicMock(content="routed response")
@@ -68,8 +68,8 @@ async def test_analytical_agent():
     
     payload = SynapticTransmission(source_node_id="test", target_node_id="analytical-001", content="find a pattern anomaly metric")
     resp = await agent.receive_prompt(payload)
-    assert len(resp.proposed_actions) == 1
-    assert resp.proposed_actions[0].action_type == "anomaly_escalation"
+    assert len(resp.action_proposals) == 1
+    assert resp.action_proposals[0].action_type == "anomaly_escalation"
     assert resp.metadata["patterns_detected"] == 1
 
 @pytest.mark.asyncio
@@ -81,8 +81,8 @@ async def test_coding_agent():
     
     payload = SynapticTransmission(source_node_id="test", target_node_id="coding-001", content="generate analyze refactor")
     resp = await agent.receive_prompt(payload)
-    assert len(resp.proposed_actions) == 1
-    assert resp.proposed_actions[0].action_type == "state_write"
+    assert len(resp.action_proposals) == 1
+    assert resp.action_proposals[0].action_type == "state_write"
 
 @pytest.mark.asyncio
 async def test_creative_agent():
@@ -93,8 +93,8 @@ async def test_creative_agent():
     
     payload = SynapticTransmission(source_node_id="test", target_node_id="creative-001", content="brainstorm innovate alternative")
     resp = await agent.receive_prompt(payload)
-    assert len(resp.proposed_actions) == 1
-    assert resp.proposed_actions[0].action_type == "innovation_proposal"
+    assert len(resp.action_proposals) == 1
+    assert resp.action_proposals[0].action_type == "innovation_proposal"
 
 @pytest.mark.asyncio
 async def test_environment_agent():
@@ -116,11 +116,11 @@ async def test_memory_agent():
     
     payload = SynapticTransmission(source_node_id="test", target_node_id="memory-001", content="remember this")
     
-    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save:
+    with patch("singularity.cognitive_nodes.memory_agent.NodeRepository.save_memory", new_callable=AsyncMock) as mock_save:
         await agent.receive_prompt(payload)
         mock_save.assert_called_once()
         
-    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save_err:
+    with patch("singularity.cognitive_nodes.memory_agent.NodeRepository.save_memory", new_callable=AsyncMock) as mock_save_err:
         mock_save_err.side_effect = Exception("db error")
         await agent.receive_prompt(payload) # should not raise
         
@@ -130,12 +130,12 @@ async def test_memory_agent():
             self.output_text = "out"
             self.timestamp = datetime.now()
             
-    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get:
+    with patch("singularity.cognitive_nodes.memory_agent.NodeRepository.get_memories", new_callable=AsyncMock) as mock_get:
         mock_get.return_value = [DummyRecord()]
         recs = await agent.recall_memories("test")
         assert len(recs) == 1
         
-    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get_err:
+    with patch("singularity.cognitive_nodes.memory_agent.NodeRepository.get_memories", new_callable=AsyncMock) as mock_get_err:
         mock_get_err.side_effect = Exception("db error")
         recs = await agent.recall_memories("test")
         assert len(recs) == 0
@@ -160,20 +160,20 @@ async def test_prompt_agent():
     mock_self = AsyncMock()
     mock_self.node_id = agent.node_id
     
-    with patch("singularity.cognitive_nodes.synapse_node.get_all_agents") as mock_get_all:
+    with patch("singularity.cognitive_nodes.synapse_node.get_all_nodes") as mock_get_all:
         mock_get_all.return_value = [mock_self, mock_target]
         await agent.broadcast_to_all(payload)
         
-    with patch("singularity.cognitive_nodes.synapse_node.get_all_agents") as mock_get_all:
+    with patch("singularity.cognitive_nodes.synapse_node.get_all_nodes") as mock_get_all:
         mock_target.receive_prompt.side_effect = Exception("err")
         mock_get_all.return_value = [mock_self, mock_target]
         await agent.broadcast_to_all(payload) # should handle exception
         
     from singularity.neural_core.node_base import DiagnosticFrame
     tf = DiagnosticFrame(node_id="test-agent", status=NodeStatus.NOMINAL, metrics={}, message="")
-    agent.cache_telemetry(tf)
-    assert agent.get_cached_telemetry("test-agent") == tf
-    assert agent.get_cached_telemetry("missing") is None
+    agent.cache_diagnostics(tf)
+    assert agent.get_cached_diagnostics("test-agent") == tf
+    assert agent.get_cached_diagnostics("missing") is None
 
 @pytest.mark.asyncio
 async def test_security_agent():

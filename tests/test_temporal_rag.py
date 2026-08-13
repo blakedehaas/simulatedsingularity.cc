@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from singularity.temporal.temporal_rag import (
-    TemporalAgentNode,
+    TemporalConsciousnessNode,
     instantiate_temporal_agent,
     simulate_dialectic,
 )
@@ -11,12 +11,12 @@ from singularity.temporal.temporal_rag import (
 logger = logging.getLogger(__name__)
 
 def test_instantiate_temporal_agent():
-    """TRACE-TRAG-001: Test instantiation of TemporalAgentNode."""
+    """TRACE-TRAG-001: Test instantiation of TemporalConsciousnessNode."""
     logger.debug("Testing instantiate_temporal_agent")
     
     agent = instantiate_temporal_agent(target_age=25, user_birth_year=1990)
     
-    assert isinstance(agent, TemporalAgentNode)
+    assert isinstance(agent, TemporalConsciousnessNode)
     assert agent.age == 25
     assert agent.memory_filter == {"cutoff_year": 2015}
 

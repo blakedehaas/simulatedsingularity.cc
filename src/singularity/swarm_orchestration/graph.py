@@ -7,11 +7,11 @@ constellation's agent architecture:
    priority gate, scanning every inbound payload for threats.
 2. **core_router** — The Core Agent inspects payload metadata and
    determines which functional agent should process the request.
-3. **agent_executor** — Invokes the target functional agent identified
+3. **node_executor** — Invokes the target functional agent identified
    by the core router.
 4. **prompt_relay** — The Prompt Relay Agent aggregates and logs
    communications and telemetry.
-5. **telemetry_emit** — Emits a consolidated telemetry frame before
+5. **diagnostics_emit** — Emits a consolidated telemetry frame before
    the graph terminates.
 
 The graph uses LangGraph's ``interrupt()`` mechanism to pause execution
@@ -46,7 +46,7 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_agent, get_all_agents
+from singularity.neural_core.node_registry import get_node, get_all_nodes
 from singularity.swarm_orchestration.state import ConstellationState
 
 logger = logging.getLogger(__name__)
@@ -55,9 +55,9 @@ logger = logging.getLogger(__name__)
 # Well-known agent IDs used by the graph
 # ---------------------------------------------------------------------------
 
-_SECURITY_AGENT_ID = "security-001"
-_CORE_AGENT_ID = "core-001"
-_PROMPT_RELAY_AGENT_ID = "prompt-001"
+_FIREWALL_NODE_ID = "security-001"
+_NEXUS_NODE_ID = "core-001"
+_SYNAPSE_NODE_ID = "prompt-001"
 
 # Risk levels that trigger an interrupt for C2 review
 _INTERRUPT_RISK_THRESHOLD: set[RiskLevel] = {RiskLevel.HIGH, RiskLevel.CRITICAL}
@@ -83,31 +83,31 @@ async def security_check(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("🛡️  Security gate — scanning payload")
 
     try:
-        agent = get_agent(_SECURITY_AGENT_ID)
+        agent = get_node(_FIREWALL_NODE_ID)
     except KeyError:
         logger.warning(
             "Security agent %r not found — skipping security gate",
-            _SECURITY_AGENT_ID,
+            _FIREWALL_NODE_ID,
         )
         return {
-            "routing_history": [_SECURITY_AGENT_ID + ":skipped"],
+            "routing_history": [_FIREWALL_NODE_ID + ":skipped"],
         }
 
     # Build a payload from the last human message
     last_human = _extract_last_human_text(state.get("messages", []))
     payload = SynapticTransmission(
         source_node_id="ground_control",
-        target_node_id=_SECURITY_AGENT_ID,
+        target_node_id=_FIREWALL_NODE_ID,
         content=last_human,
     )
 
     response: CognitiveOutput = await agent.receive_prompt(payload)
 
     return {
-        "messages": [AIMessage(content=response.content, name=_SECURITY_AGENT_ID)],
-        "current_agent": _SECURITY_AGENT_ID,
-        "routing_history": [_SECURITY_AGENT_ID],
-        "telemetry_frames": {_SECURITY_AGENT_ID: response.telemetry},
+        "messages": [AIMessage(content=response.content, name=_FIREWALL_NODE_ID)],
+        "current_node": _FIREWALL_NODE_ID,
+        "routing_history": [_FIREWALL_NODE_ID],
+        "diagnostic_frames": {_FIREWALL_NODE_ID: response.telemetry},
     }
 
 
@@ -122,43 +122,43 @@ async def core_router(state: dict[str, Any]) -> dict[str, Any]:
         state: The current constellation state dictionary.
 
     Returns:
-        State update setting ``current_agent`` to the routed target.
+        State update setting ``current_node`` to the routed target.
     """
     logger.info("⚙️  Core router — determining target agent")
 
     try:
-        agent = get_agent(_CORE_AGENT_ID)
+        agent = get_node(_NEXUS_NODE_ID)
     except KeyError:
         logger.warning(
             "Core agent %r not found — terminating route",
-            _CORE_AGENT_ID,
+            _NEXUS_NODE_ID,
         )
         return {
-            "current_agent": _CORE_AGENT_ID,
-            "routing_history": [_CORE_AGENT_ID + ":missing"],
+            "current_node": _NEXUS_NODE_ID,
+            "routing_history": [_NEXUS_NODE_ID + ":missing"],
         }
 
     last_human = _extract_last_human_text(state.get("messages", []))
     payload = SynapticTransmission(
-        source_node_id=_SECURITY_AGENT_ID,
-        target_node_id=_CORE_AGENT_ID,
+        source_node_id=_FIREWALL_NODE_ID,
+        target_node_id=_NEXUS_NODE_ID,
         content=last_human,
     )
 
     response: CognitiveOutput = await agent.receive_prompt(payload)
 
     # Determine routing target from response metadata
-    route_target: str = response.metadata.get("route_to", _CORE_AGENT_ID)
+    route_target: str = response.metadata.get("route_to", _NEXUS_NODE_ID)
 
     return {
-        "messages": [AIMessage(content=response.content, name=_CORE_AGENT_ID)],
-        "current_agent": route_target,
-        "routing_history": [_CORE_AGENT_ID],
-        "telemetry_frames": {_CORE_AGENT_ID: response.telemetry},
+        "messages": [AIMessage(content=response.content, name=_NEXUS_NODE_ID)],
+        "current_node": route_target,
+        "routing_history": [_NEXUS_NODE_ID],
+        "diagnostic_frames": {_NEXUS_NODE_ID: response.telemetry},
     }
 
 
-async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
+async def node_executor(state: dict[str, Any]) -> dict[str, Any]:
     """Execute the functional agent selected by the core router.
 
     If the target agent proposes any HIGH or CRITICAL risk actions,
@@ -172,11 +172,11 @@ async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
         State update with the agent's response, proposed actions,
         and any interrupt requests generated.
     """
-    target_id: str = state.get("current_agent", _CORE_AGENT_ID)
+    target_id: str = state.get("current_node", _NEXUS_NODE_ID)
     logger.info("🚀 Agent executor — invoking %r", target_id)
 
     try:
-        agent = get_agent(target_id)
+        agent = get_node(target_id)
     except KeyError:
         logger.error("Target agent %r not found in registry", target_id)
         error_msg = f"Agent {target_id!r} is not registered in the constellation."
@@ -187,7 +187,7 @@ async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
 
     last_human = _extract_last_human_text(state.get("messages", []))
     payload = SynapticTransmission(
-        source_node_id=_CORE_AGENT_ID,
+        source_node_id=_NEXUS_NODE_ID,
         target_node_id=target_id,
         content=last_human,
     )
@@ -196,7 +196,7 @@ async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
 
     # Check for high-risk proposed actions → trigger interrupt
     new_interrupts: list[C2InterventionRequest] = []
-    for action in response.proposed_actions:
+    for action in response.action_proposals:
         if action.risk_level in _INTERRUPT_RISK_THRESHOLD:
             logger.warning(
                 "⚠️  HIGH-RISK action proposed by %r: %s (risk=%s)",
@@ -211,7 +211,7 @@ async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
                     "node_id": target_id,
                     "action_id": action.action_id,
                     "routing_history": state.get("routing_history", []),
-                    "heartbeat_seq": state.get("heartbeat_sequence", 0),
+                    "heartbeat_seq": state.get("pulse_sequence", 0),
                 },
             )
             new_interrupts.append(irq)
@@ -245,11 +245,11 @@ async def agent_executor(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "messages": [AIMessage(content=response.content, name=target_id)],
-        "current_agent": target_id,
+        "current_node": target_id,
         "routing_history": [target_id],
-        "proposed_actions": response.proposed_actions,
-        "pending_interrupts": new_interrupts,
-        "telemetry_frames": {target_id: response.telemetry},
+        "action_proposals": response.action_proposals,
+        "pending_interventions": new_interrupts,
+        "diagnostic_frames": {target_id: response.telemetry},
         "is_interrupted": len(new_interrupts) > 0,
     }
 
@@ -269,40 +269,40 @@ async def prompt_relay(state: dict[str, Any]) -> dict[str, Any]:
     logger.info("📡 Prompt relay — aggregating communications")
 
     try:
-        agent = get_agent(_PROMPT_RELAY_AGENT_ID)
+        agent = get_node(_SYNAPSE_NODE_ID)
     except KeyError:
         # Graceful degradation — synthesize a summary
         visited = state.get("routing_history", [])
         summary = (
             f"Prompt relay complete. Routing path: {' → '.join(visited)}. "
-            f"Telemetry frames collected: {len(state.get('telemetry_frames', {}))}."
+            f"Telemetry frames collected: {len(state.get('diagnostic_frames', {}))}."
         )
         return {
             "messages": [AIMessage(content=summary, name="prompt_relay")],
-            "routing_history": [_PROMPT_RELAY_AGENT_ID + ":synthetic"],
+            "routing_history": [_SYNAPSE_NODE_ID + ":synthetic"],
         }
 
     last_human = _extract_last_human_text(state.get("messages", []))
     payload = SynapticTransmission(
-        source_node_id=state.get("current_agent", "system"),
-        target_node_id=_PROMPT_RELAY_AGENT_ID,
+        source_node_id=state.get("current_node", "system"),
+        target_node_id=_SYNAPSE_NODE_ID,
         content=last_human,
         metadata={
             "routing_history": state.get("routing_history", []),
-            "action_count": len(state.get("proposed_actions", [])),
+            "action_count": len(state.get("action_proposals", [])),
         },
     )
 
     response: CognitiveOutput = await agent.receive_prompt(payload)
 
     return {
-        "messages": [AIMessage(content=response.content, name=_PROMPT_RELAY_AGENT_ID)],
-        "routing_history": [_PROMPT_RELAY_AGENT_ID],
-        "telemetry_frames": {_PROMPT_RELAY_AGENT_ID: response.telemetry},
+        "messages": [AIMessage(content=response.content, name=_SYNAPSE_NODE_ID)],
+        "routing_history": [_SYNAPSE_NODE_ID],
+        "diagnostic_frames": {_SYNAPSE_NODE_ID: response.telemetry},
     }
 
 
-async def telemetry_emit(state: dict[str, Any]) -> dict[str, Any]:
+async def diagnostics_emit(state: dict[str, Any]) -> dict[str, Any]:
     """Emit a consolidated telemetry report as the final graph node.
 
     Collects telemetry from all agents that participated in this
@@ -317,7 +317,7 @@ async def telemetry_emit(state: dict[str, Any]) -> dict[str, Any]:
     """
     logger.info("📊 Telemetry emit — final constellation snapshot")
 
-    frames: dict[str, DiagnosticFrame] = state.get("telemetry_frames", {})
+    frames: dict[str, DiagnosticFrame] = state.get("diagnostic_frames", {})
     agent_summaries: list[str] = []
     for node_id, frame in frames.items():
         agent_summaries.append(
@@ -328,13 +328,13 @@ async def telemetry_emit(state: dict[str, Any]) -> dict[str, Any]:
     summary_text = (
         "📊 TELEMETRY REPORT\n"
         + "\n".join(agent_summaries or ["  (no telemetry frames collected)"])
-        + f"\n  Heartbeat seq: {state.get('heartbeat_sequence', 0)}"
+        + f"\n  Heartbeat seq: {state.get('pulse_sequence', 0)}"
         + f"\n  Routing path: {' → '.join(state.get('routing_history', []))}"
     )
 
     return {
         "messages": [AIMessage(content=summary_text, name="telemetry")],
-        "heartbeat_sequence": state.get("heartbeat_sequence", 0) + 1,
+        "pulse_sequence": state.get("pulse_sequence", 0) + 1,
     }
 
 
@@ -343,22 +343,22 @@ async def telemetry_emit(state: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _route_after_core(state: dict[str, Any]) -> str:
-    """Decide whether to run agent_executor or skip to prompt_relay.
+    """Decide whether to run node_executor or skip to prompt_relay.
 
-    If the core router set ``current_agent`` to itself (no delegation),
+    If the core router set ``current_node`` to itself (no delegation),
     we skip straight to the prompt relay.
 
     Args:
         state: The current constellation state dictionary.
 
     Returns:
-        Name of the next node: ``"agent_executor"`` or ``"prompt_relay"``.
+        Name of the next node: ``"node_executor"`` or ``"prompt_relay"``.
     """
-    target = state.get("current_agent", _CORE_AGENT_ID)
-    if target == _CORE_AGENT_ID:
+    target = state.get("current_node", _NEXUS_NODE_ID)
+    if target == _NEXUS_NODE_ID:
         logger.info("Core router did not delegate — skipping to prompt relay")
         return "prompt_relay"
-    return "agent_executor"
+    return "node_executor"
 
 
 def _route_after_executor(state: dict[str, Any]) -> str:
@@ -401,9 +401,9 @@ def build_graph(
     # Register nodes
     graph.add_node("security_check", security_check)
     graph.add_node("core_router", core_router)
-    graph.add_node("agent_executor", agent_executor)
+    graph.add_node("node_executor", node_executor)
     graph.add_node("prompt_relay", prompt_relay)
-    graph.add_node("telemetry_emit", telemetry_emit)
+    graph.add_node("diagnostics_emit", diagnostics_emit)
 
     # Edges — linear pipeline with conditional fan-out from core_router
     graph.add_edge(START, "security_check")
@@ -414,19 +414,19 @@ def build_graph(
         "core_router",
         _route_after_core,
         {
-            "agent_executor": "agent_executor",
+            "node_executor": "node_executor",
             "prompt_relay": "prompt_relay",
         },
     )
 
     # After agent execution always go to prompt relay
-    graph.add_edge("agent_executor", "prompt_relay")
+    graph.add_edge("node_executor", "prompt_relay")
 
     # After relay always go to telemetry
-    graph.add_edge("prompt_relay", "telemetry_emit")
+    graph.add_edge("prompt_relay", "diagnostics_emit")
 
     # Telemetry is the terminal node
-    graph.add_edge("telemetry_emit", END)
+    graph.add_edge("diagnostics_emit", END)
 
     # Build async checkpointer
     checkpointer = AsyncSqliteSaver.from_conn_string(str(checkpoint_path))
@@ -474,12 +474,12 @@ async def run_prompt(
 
     initial_state: dict[str, Any] = {
         "messages": [HumanMessage(content=user_message)],
-        "current_agent": "",
+        "current_node": "",
         "routing_history": [],
-        "proposed_actions": [],
-        "pending_interrupts": [],
-        "telemetry_frames": {},
-        "heartbeat_sequence": 0,
+        "action_proposals": [],
+        "pending_interventions": [],
+        "diagnostic_frames": {},
+        "pulse_sequence": 0,
         "is_interrupted": False,
     }
 

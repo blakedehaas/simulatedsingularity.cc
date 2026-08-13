@@ -22,8 +22,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ Your primary role is brainstorming, innovation proposals, and alternative strate
 When addressing prompts, employ lateral thinking. Provide novel solutions, out-of-the-box ideas, and multiple divergent pathways to solve the operator's challenge."""
 
 
-@register_agent
+@register_node
 class GenesisNode(CognitiveNode):
     """Priority-7 divergent thinking and innovation engine.
 
@@ -40,23 +40,23 @@ class GenesisNode(CognitiveNode):
     complex constraints, and brainstorms architecture pathways.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "creative-001"
+    NODE_ID: str = "creative-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Creative Agent",
             node_role="Brainstorming, innovation proposals, and alternative strategies",
             priority=7,
         )
-        self._model = GemmaChatModel(node_role="creative", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="creative", system_prompt=SYSTEM_PROMPT)
         self._brainstorms: int = 0
         self._innovations: int = 0
         self._alternatives: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("GenesisNode initialized — priority 7")
 
@@ -79,7 +79,7 @@ class GenesisNode(CognitiveNode):
         """
         self.set_status(NodeStatus.BUSY)
 
-        proposed_actions: list[ActionProposal] = []
+        action_proposals: list[ActionProposal] = []
         content_lower = payload.content.lower()
 
         if "brainstorm" in content_lower:
@@ -94,7 +94,7 @@ class GenesisNode(CognitiveNode):
                 parameters={"prompt_excerpt": payload.content[:120]},
                 risk_level=RiskLevel.LOW,
             )
-            proposed_actions.append(action)
+            action_proposals.append(action)
 
         if "alternative" in content_lower:
             self._alternatives += 1
@@ -107,7 +107,7 @@ class GenesisNode(CognitiveNode):
             node_id=self.node_id,
             content=response_text,
             telemetry=telemetry,
-            proposed_actions=proposed_actions,
+            action_proposals=action_proposals,
             metadata={
                 "brainstorms": self._brainstorms,
                 "innovations": self._innovations,
@@ -124,7 +124,7 @@ class GenesisNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with ideation statistics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         return await self.emit_telemetry()
 
     async def emit_telemetry(self) -> DiagnosticFrame:
@@ -142,7 +142,7 @@ class GenesisNode(CognitiveNode):
                 "brainstorms": float(self._brainstorms),
                 "innovations": float(self._innovations),
                 "alternatives": float(self._alternatives),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Creative subsystem active — ready for ideation tasks",

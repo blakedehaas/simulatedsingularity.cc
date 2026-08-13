@@ -22,7 +22,7 @@ from singularity.neural_core.node_base import (
     SystemPulse,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_agent, get_all_agents
+from singularity.neural_core.node_registry import get_node, get_all_nodes
 from singularity.memory_vault.repository import TaskRepository
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class HeartbeatScheduler:
+class PulseScheduler:
     """APScheduler-backed heartbeat broadcaster for the constellation.
 
     Maintains a monotonically increasing sequence counter and dispatches
@@ -51,7 +51,7 @@ class HeartbeatScheduler:
         self.is_running: bool = False
         self._sequence: int = 0
         self._scheduler: AsyncScheduler | None = None
-        self._heartbeat_job_id: str = "heartbeat-broadcast"
+        self._pulse_job_id: str = "heartbeat-broadcast"
         self._managed_job_ids: dict[str, str] = {}  # task_id -> apscheduler job_id
 
     # ------------------------------------------------------------------
@@ -61,15 +61,15 @@ class HeartbeatScheduler:
     async def start(self) -> None:
         """Start the heartbeat scheduler."""
         if self.is_running:
-            raise RuntimeError("HeartbeatScheduler is already running.")
+            raise RuntimeError("PulseScheduler is already running.")
 
         self._scheduler = AsyncIOScheduler()
         self._scheduler.start()
 
         self._scheduler.add_job(
-            self.broadcast_heartbeat,
+            self.broadcast_pulse,
             trigger=IntervalTrigger(seconds=self.interval_seconds),
-            id=self._heartbeat_job_id,
+            id=self._pulse_job_id,
         )
         
         self._scheduler.add_job(
@@ -80,14 +80,14 @@ class HeartbeatScheduler:
 
         self.is_running = True
         logger.info(
-            "HeartbeatScheduler started — broadcasting every %ds",
+            "PulseScheduler started — broadcasting every %ds",
             self.interval_seconds,
         )
 
     async def stop(self) -> None:
         """Stop the heartbeat scheduler and clean up resources."""
         if not self.is_running:
-            raise RuntimeError("HeartbeatScheduler is not running.")
+            raise RuntimeError("PulseScheduler is not running.")
 
         if self._scheduler is not None:
             self._scheduler.shutdown(wait=False)
@@ -95,25 +95,25 @@ class HeartbeatScheduler:
 
         self.is_running = False
         self._managed_job_ids.clear()
-        logger.info("HeartbeatScheduler stopped")
+        logger.info("PulseScheduler stopped")
 
     async def start_triadic(self) -> None:
         """Start the heartbeat scheduler using triadic broadcast."""
         if self.is_running:
-            raise RuntimeError("HeartbeatScheduler is already running.")
+            raise RuntimeError("PulseScheduler is already running.")
 
         self._scheduler = AsyncIOScheduler()
         self._scheduler.start()
 
         self._scheduler.add_job(
-            self.broadcast_triadic_heartbeat,
+            self.broadcast_triadic_pulse,
             trigger=IntervalTrigger(seconds=self.interval_seconds),
-            id=self._heartbeat_job_id,
+            id=self._pulse_job_id,
         )
 
         self.is_running = True
         logger.info(
-            "HeartbeatScheduler started (Triadic) — broadcasting every %ds",
+            "PulseScheduler started (Triadic) — broadcasting every %ds",
             self.interval_seconds,
         )
 
@@ -135,7 +135,7 @@ class HeartbeatScheduler:
     # Heartbeat broadcast
     # ------------------------------------------------------------------
 
-    async def broadcast_heartbeat(self) -> list[DiagnosticFrame]:
+    async def broadcast_pulse(self) -> list[DiagnosticFrame]:
         """Send a heartbeat event to every active agent in the constellation.
 
         Builds a :class:`SystemPulse` containing the current sequence
@@ -148,7 +148,7 @@ class HeartbeatScheduler:
         """
         self._sequence += 1
 
-        agents = get_all_agents()
+        agents = get_all_nodes()
         constellation_summary: dict[str, NodeStatus] = {
             agent.node_id: agent.status for agent in agents
         }
@@ -184,7 +184,7 @@ class HeartbeatScheduler:
         )
         return frames
 
-    async def broadcast_triadic_heartbeat(self) -> list[DiagnosticFrame]:
+    async def broadcast_triadic_pulse(self) -> list[DiagnosticFrame]:
         """Send a heartbeat event only to the triadic agents.
         
         Targets: orchestrator-001, safeguard-001, synthesis-001.
@@ -195,7 +195,7 @@ class HeartbeatScheduler:
         """
         self._sequence += 1
 
-        all_agents = get_all_agents()
+        all_agents = get_all_nodes()
         triadic_ids = {"orchestrator-001", "safeguard-001", "synthesis-001"}
         agents = [a for a in all_agents if a.node_id in triadic_ids]
 
@@ -241,7 +241,7 @@ class HeartbeatScheduler:
 
     async def schedule_task(
         self,
-        target_agent: str,
+        target_node: str,
         prompt_text: str,
         delay_seconds: int = 0,
         interval_seconds: int = 0,
@@ -252,7 +252,7 @@ class HeartbeatScheduler:
         APScheduler is running, registers a corresponding job.
 
         Args:
-            target_agent: ID of the target agent (or ``"all"`` for broadcast).
+            target_node: ID of the target agent (or ``"all"`` for broadcast).
             prompt_text: The prompt text to deliver.
             delay_seconds: Seconds from now until first execution.
             interval_seconds: Recurrence interval (``0`` for one-shot).
@@ -263,7 +263,7 @@ class HeartbeatScheduler:
         execute_at = _utc_now() + timedelta(seconds=delay_seconds)
 
         record = await TaskRepository.create_task(
-            target_agent=target_agent,
+            target_node=target_node,
             prompt_text=prompt_text,
             execute_at=execute_at,
             interval_seconds=interval_seconds,
@@ -273,7 +273,7 @@ class HeartbeatScheduler:
         logger.info(
             "Scheduled task %s for agent %s at %s (interval=%ds)",
             task_id,
-            target_agent,
+            target_node,
             execute_at.isoformat(),
             interval_seconds,
         )
@@ -321,7 +321,7 @@ class HeartbeatScheduler:
 
     def __repr__(self) -> str:
         return (
-            f"<HeartbeatScheduler "
+            f"<PulseScheduler "
             f"interval={self.interval_seconds}s "
             f"seq={self._sequence} "
             f"running={self.is_running}>"

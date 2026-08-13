@@ -8,7 +8,7 @@ def test_mutate_topology_bounds():
     # Setup mock state with extreme weights to test bounding
     state = SwarmState(
         messages=[],
-        active_agents=["agent_a", "agent_b", "agent_c"],
+        active_nodes=["agent_a", "agent_b", "agent_c"],
         adjacency_matrix={
             "agent_a": {"agent_b": 0.0, "agent_c": 1.5}
         }
@@ -28,7 +28,7 @@ def test_mutate_topology_new_edge():
     """Test creating a new edge during mutation."""
     state = SwarmState(
         messages=[],
-        active_agents=["agent_a", "agent_b"],
+        active_nodes=["agent_a", "agent_b"],
         adjacency_matrix={}
     )
     

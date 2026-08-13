@@ -21,8 +21,8 @@ from singularity.neural_core.node_base import (
     RiskLevel,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ Your primary role is code generation, static analysis, and refactoring.
 When given a prompt, act as an expert software engineer. Provide robust code snippets, architectural improvements, and security-first refactoring suggestions."""
 
 
-@register_agent
+@register_node
 class ArchitectNode(CognitiveNode):
     """Priority-5 software engineering specialist.
 
@@ -39,23 +39,23 @@ class ArchitectNode(CognitiveNode):
     analysis of proposed execution plans.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "coding-001"
+    NODE_ID: str = "coding-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Coding Agent",
             node_role="Code generation, static analysis, and refactoring",
             priority=5,
         )
-        self._model = GemmaChatModel(node_role="coding", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="coding", system_prompt=SYSTEM_PROMPT)
         self._modules_generated: int = 0
         self._analyses_performed: int = 0
         self._refactors_suggested: int = 0
-        self._last_heartbeat_seq: int = 0
+        self._last_pulse_sequence: int = 0
         self._uptime_start: float = time.monotonic()
         logger.info("ArchitectNode initialized — priority 5")
 
@@ -77,7 +77,7 @@ class ArchitectNode(CognitiveNode):
         """
         self.set_status(NodeStatus.BUSY)
 
-        proposed_actions: list[ActionProposal] = []
+        action_proposals: list[ActionProposal] = []
         content_lower = payload.content.lower()
 
         if "generate" in content_lower or "create" in content_lower:
@@ -89,7 +89,7 @@ class ArchitectNode(CognitiveNode):
                 parameters={"prompt_excerpt": payload.content[:120]},
                 risk_level=RiskLevel.MEDIUM,
             )
-            proposed_actions.append(action)
+            action_proposals.append(action)
 
         if "analyze" in content_lower or "analysis" in content_lower:
             self._analyses_performed += 1
@@ -105,7 +105,7 @@ class ArchitectNode(CognitiveNode):
             node_id=self.node_id,
             content=response_text,
             telemetry=telemetry,
-            proposed_actions=proposed_actions,
+            action_proposals=action_proposals,
             metadata={
                 "modules_generated": self._modules_generated,
                 "analyses_performed": self._analyses_performed,
@@ -122,7 +122,7 @@ class ArchitectNode(CognitiveNode):
         Returns:
             A :class:`DiagnosticFrame` with code-quality metrics.
         """
-        self._last_heartbeat_seq = heartbeat.sequence_number
+        self._last_pulse_sequence = heartbeat.sequence_number
         return await self.emit_telemetry()
 
     async def emit_telemetry(self) -> DiagnosticFrame:
@@ -139,7 +139,7 @@ class ArchitectNode(CognitiveNode):
                 "modules_generated": float(self._modules_generated),
                 "analyses_performed": float(self._analyses_performed),
                 "refactors_suggested": float(self._refactors_suggested),
-                "last_heartbeat_seq": float(self._last_heartbeat_seq),
+                "last_heartbeat_seq": float(self._last_pulse_sequence),
                 "uptime_seconds": round(uptime, 2),
             },
             message="Coding engine operational — awaiting architecture directives",

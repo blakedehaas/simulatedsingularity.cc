@@ -93,7 +93,7 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
         seed: Math.floor(Math.random() * 1000000),
         seed_prompt: JSON.stringify(finalSeedPrompt),
         end_state_condition: endStateCondition,
-        agents_config: agents.filter(a => a.name.trim() !== '' && a.system_prompt.trim() !== ''),
+        nodes_config: agents.filter(a => a.name.trim() !== '' && a.system_prompt.trim() !== ''),
         verbose_mode: verboseMode,
         max_tokens: maxTokens ? parseInt(maxTokens) : null
       };
@@ -102,7 +102,7 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
       const newSimId = res.data?.id || res.data?.sim_id || res.data;
       if (typeof newSimId === 'string' || typeof newSimId === 'number') {
         setSimId(newSimId);
-        if (setAgentsState) setAgentsState(payload.agents_config);
+        if (setAgentsState) setAgentsState(payload.nodes_config);
       } else {
         throw new Error('Unexpected response format from spawn endpoint');
       }
@@ -155,9 +155,9 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
         setEndStateCondition(sim.end_state_condition || '');
         setMaxTokens(sim.max_tokens || '');
         setVerboseMode(sim.verbose_mode || false);
-        if (sim.agents_config) {
-          setAgents(sim.agents_config);
-          if (setAgentsState) setAgentsState(sim.agents_config);
+        if (sim.nodes_config) {
+          setAgents(sim.nodes_config);
+          if (setAgentsState) setAgentsState(sim.nodes_config);
         }
       } catch (err) {
         console.error('Error importing simulation:', err);

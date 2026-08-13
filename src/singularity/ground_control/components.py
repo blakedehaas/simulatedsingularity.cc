@@ -212,7 +212,7 @@ def build_triadic_overview(agents: list[CognitiveNode]) -> str:
 # Heartbeat indicator
 # ---------------------------------------------------------------------------
 
-def build_heartbeat_indicator(next_heartbeat_in: float) -> str:
+def build_pulse_indicator(next_heartbeat_in: float) -> str:
     """Build a compact heartbeat countdown display.
 
     Args:

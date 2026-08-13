@@ -6,7 +6,7 @@ def test_detect_clusters():
     """Test finding connected components with weight >= 0.5."""
     state = SwarmState(
         messages=[],
-        active_agents=["a", "b", "c", "d"],
+        active_nodes=["a", "b", "c", "d"],
         adjacency_matrix={
             "a": {"b": 0.9},
             "b": {"a": 0.8},
@@ -25,7 +25,7 @@ def test_assign_hierarchy():
     """Test calculating in-degree centrality to find a leader."""
     state = SwarmState(
         messages=[],
-        active_agents=["leader_node", "sub1", "sub2"],
+        active_nodes=["leader_node", "sub1", "sub2"],
         adjacency_matrix={
             "sub1": {"leader_node": 1.0},
             "sub2": {"leader_node": 0.8, "sub1": 0.1},

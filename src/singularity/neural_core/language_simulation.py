@@ -157,14 +157,14 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
                 )
                 db.add(call_msg)
             
-            if fn_name == "update_agent_system_prompt":
+            if fn_name == "update_node_system_prompt":
                 try:
                     target_name = fn_args.get("node_name")
                     new_prompt = fn_args.get("new_prompt")
                     found = False
                     
-                    if hasattr(config, 'agents_config'):
-                        for a in config.agents_config:
+                    if hasattr(config, 'nodes_config'):
+                        for a in config.nodes_config:
                             if a.get("name") == target_name:
                                 a["system_prompt"] = new_prompt
                                 found = True
@@ -175,7 +175,7 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
                             result_config = await db.execute(select(LanguageSimulationConfig).where(LanguageSimulationConfig.session_id == session_id))
                             db_config = result_config.scalars().first()
                             if db_config:
-                                db_config.agents_config = list(config.agents_config)
+                                db_config.nodes_config = list(config.nodes_config)
                         result = f"Successfully updated system prompt for {target_name}"
                     else:
                         result = f"Error: Agent '{target_name}' not found."
@@ -228,9 +228,9 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
     
     client = genai.Client()
     
-    agents_config = config.agents_config
-    if not isinstance(agents_config, list) or len(agents_config) == 0:
-        logger.error(f"agents_config must be a non-empty list")
+    nodes_config = config.nodes_config
+    if not isinstance(nodes_config, list) or len(nodes_config) == 0:
+        logger.error(f"nodes_config must be a non-empty list")
         return
         
     try:
@@ -267,7 +267,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 
             history_parts = build_history_parts(history)
             
-            logger.info(f"Polling {len(agents_config)} agents for interjection intents...")
+            logger.info(f"Polling {len(nodes_config)} agents for interjection intents...")
             tasks = [
                 generate_interjection_intent(
                     client, 
@@ -276,7 +276,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                     history_parts,
                     verbose_mode
                 )
-                for agent in agents_config
+                for agent in nodes_config
             ]
             
             intents_and_tokens = await asyncio.gather(*tasks)
@@ -286,7 +286,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
             
             queue = asyncio.PriorityQueue()
             
-            for agent, intent in zip(agents_config, intents):
+            for agent, intent in zip(nodes_config, intents):
                 node_name = agent.get("name", "UnknownNode")
                 if intent.get("intent") == "INTERJECT":
                     try:
@@ -300,7 +300,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                         
             if queue.empty():
                 logger.info("Deadlock: Queue empty. Forcing first agent to speak.")
-                agent = agents_config[0]
+                agent = nodes_config[0]
                 node_name = agent.get("name", "UnknownNode")
                 system_prompt = agent.get("system_prompt", "")
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
@@ -320,7 +320,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
             logger.info(f"Agent {winner_name} interjects with priority {-neg_prio}")
             
             if neg_prio != -10:
-                agent = next((a for a in agents_config if a.get("name") == winner_name), agents_config[0])
+                agent = next((a for a in nodes_config if a.get("name") == winner_name), nodes_config[0])
                 system_prompt = agent.get("system_prompt", "")
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 

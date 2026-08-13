@@ -110,7 +110,7 @@ def create_pull_request(head_branch: str, base_branch: str, title: str, body: st
     except FileNotFoundError:
         return "Error: GitHub CLI (gh) is not installed on this system."
 
-def update_agent_system_prompt(node_name: str, new_prompt: str) -> str:
+def update_node_system_prompt(node_name: str, new_prompt: str) -> str:
     """Update the underlying system prompt instructions for any agent in the simulation matrix. This allows agents to rewrite their own logic."""
     pass
 
@@ -120,5 +120,5 @@ SWARM_TOOLS = [
     write_file,
     create_github_issue,
     create_pull_request,
-    update_agent_system_prompt
+    update_node_system_prompt
 ]

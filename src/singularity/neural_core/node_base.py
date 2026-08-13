@@ -186,8 +186,8 @@ class CognitiveOutput(BaseModel):
         node_id: The responding agent.
         content: Textual response content.
         telemetry: Current telemetry snapshot.
-        proposed_actions: Any state-mutating actions the agent wants to perform.
-        connection_feedback: Feedback to update graph routing weights.
+        action_proposals: Any state-mutating actions the agent wants to perform.
+        synaptic_feedback: Feedback to update graph routing weights.
         metadata: Arbitrary response metadata.
         timestamp: When the response was generated.
     """
@@ -195,8 +195,8 @@ class CognitiveOutput(BaseModel):
     node_id: str
     content: str
     telemetry: DiagnosticFrame
-    proposed_actions: list[ActionProposal] = Field(default_factory=list)
-    connection_feedback: list[SynapticWeightFeedback] = Field(default_factory=list)
+    action_proposals: list[ActionProposal] = Field(default_factory=list)
+    synaptic_feedback: list[SynapticWeightFeedback] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=_utc_now)
 
@@ -235,10 +235,10 @@ class CognitiveNode(ABC):
         self.status = NodeStatus.INITIALIZING
         self._created_at = _utc_now()
         self._scratchpad: list[str] = []
-        self._heartbeat_count: int = 0
+        self._pulse_count: int = 0
         
-        from singularity.neural_core.models import GemmaChatModel
-        self._reflective_model = GemmaChatModel(
+        from singularity.neural_core.models import GeminiCognitionModel
+        self._reflective_model = GeminiCognitionModel(
             node_role=f"{node_role}_reflective",
             system_prompt=(
                 f"You are the internal reflective cognitive layer for {node_name} ({node_id}). "
@@ -255,11 +255,11 @@ class CognitiveNode(ABC):
 
     async def receive_prompt(self, payload: SynapticTransmission) -> CognitiveOutput:
         """Process an incoming prompt payload with scratchpad context."""
-        from singularity.memory_vault.repository import AgentRepository
+        from singularity.memory_vault.repository import NodeRepository
 
         entry = f"Prompt received from {payload.source_node_id}: {payload.content}"
         self._scratchpad.append(entry)
-        await AgentRepository.append_scratchpad_log(self.node_id, entry)
+        await NodeRepository.append_scratchpad_log(self.node_id, entry)
 
         # ------------------------------------------------------------------
         # Reflective Phase
@@ -279,7 +279,7 @@ class CognitiveNode(ABC):
             
         reflection_entry = f"[INTERNAL REFLECTION]: {reflection}"
         self._scratchpad.append(reflection_entry)
-        await AgentRepository.append_scratchpad_log(self.node_id, reflection_entry)
+        await NodeRepository.append_scratchpad_log(self.node_id, reflection_entry)
 
         # ------------------------------------------------------------------
         # Operational Phase
@@ -307,7 +307,7 @@ class CognitiveNode(ABC):
 
         out_entry = f"Response: {response.content}"
         self._scratchpad.append(out_entry)
-        await AgentRepository.append_scratchpad_log(self.node_id, out_entry)
+        await NodeRepository.append_scratchpad_log(self.node_id, out_entry)
 
         return response
 
@@ -317,14 +317,14 @@ class CognitiveNode(ABC):
 
     async def process_heartbeat(self, heartbeat: SystemPulse) -> DiagnosticFrame:
         """Process a heartbeat and handle scratchpad compaction."""
-        from singularity.memory_vault.repository import AgentRepository
+        from singularity.memory_vault.repository import NodeRepository
 
         entry = f"Heartbeat seq {heartbeat.sequence_number} received."
         self._scratchpad.append(entry)
-        await AgentRepository.append_scratchpad_log(self.node_id, entry)
+        await NodeRepository.append_scratchpad_log(self.node_id, entry)
 
-        self._heartbeat_count += 1
-        if self._heartbeat_count >= 10 and len(self._scratchpad) > 1:
+        self._pulse_count += 1
+        if self._pulse_count >= 10 and len(self._scratchpad) > 1:
             mid = len(self._scratchpad) // 2
             to_compact = "\n".join(self._scratchpad[:mid])
             
@@ -336,10 +336,10 @@ class CognitiveNode(ABC):
                     )
                     compacted = f"[COMPACTED CONTEXT]: {summary_resp.content}"
                     self._scratchpad = [compacted] + self._scratchpad[mid:]
-                    await AgentRepository.append_scratchpad_log(self.node_id, f"Compacted scratchpad into: {compacted}")
+                    await NodeRepository.append_scratchpad_log(self.node_id, f"Compacted scratchpad into: {compacted}")
                 except Exception:
                     pass
-            self._heartbeat_count = 0
+            self._pulse_count = 0
 
         return await self.handle_heartbeat(heartbeat)
 

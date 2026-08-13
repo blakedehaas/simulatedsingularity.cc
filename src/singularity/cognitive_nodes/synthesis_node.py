@@ -18,8 +18,8 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import register_agent
-from singularity.neural_core.models import GemmaChatModel
+from singularity.neural_core.node_registry import register_node
+from singularity.neural_core.models import GeminiCognitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -28,26 +28,26 @@ Your role fuses coding, analytical, and creative execution.
 Generate code, perform deep analysis, and synthesize creative solutions based on the prompt."""
 
 
-@register_agent
+@register_node
 class SynthesisNode(CognitiveNode):
     """Node III — The Execution & Synthesis Agent (The Doer).
 
     Stateless execution: code generation, analysis, and creative synthesis.
 
     Attributes:
-        AGENT_ID: Registry key for this agent class.
+        NODE_ID: Registry key for this agent class.
     """
 
-    AGENT_ID: str = "synthesis-001"
+    NODE_ID: str = "synthesis-001"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            node_id=self.AGENT_ID,
+            node_id=self.NODE_ID,
             node_name="Synthesis Agent",
             node_role="Stateless execution: code generation, analysis, and creative synthesis",
             priority=5,
         )
-        self._model = GemmaChatModel(node_role="coding", system_prompt=SYSTEM_PROMPT)
+        self._model = GeminiCognitionModel(node_role="coding", system_prompt=SYSTEM_PROMPT)
         self._tasks_executed: int = 0
         self._total_tokens_estimated: int = 0
         self._uptime_start: float = time.monotonic()

@@ -22,14 +22,14 @@ from singularity.neural_core.node_base import (
     SynapticTransmission,
     DiagnosticFrame,
 )
-from singularity.neural_core.node_registry import get_agent, get_all_agents
+from singularity.neural_core.node_registry import get_node, get_all_nodes
 from singularity.memory_vault.repository import (
     LogRepository,
     StateRepository,
 )
 from singularity.sensorium.events import (
-    TelemetryEvent,
-    TelemetryEventType,
+    SensoriumEvent,
+    SensoriumEventType,
     get_event_bus,
 )
 
@@ -63,7 +63,7 @@ async def handle_user_prompt(
         A tuple of ``(CognitiveOutput, formatted_display_text)``.  If no
         agents are available, returns ``(None, error_message)``.
     """
-    agents = get_all_agents()
+    agents = get_all_nodes()
     if not agents:
         error_text = (
             "⚠️ **No agents available.** The constellation has not been "
@@ -72,71 +72,71 @@ async def handle_user_prompt(
         return None, error_text
 
     # Route to the requested agent or fallback to the highest-priority agent
-    target_agent = agents[0]
+    target_node = agents[0]
     if target_node_id:
         try:
-            target_agent = get_agent(target_node_id)
+            target_node = get_node(target_node_id)
         except KeyError:
-            logger.warning("Target agent %s not found, falling back to %s", target_node_id, target_agent.node_id)
+            logger.warning("Target agent %s not found, falling back to %s", target_node_id, target_node.node_id)
 
     payload = SynapticTransmission(
         source_node_id="ground_control",
-        target_node_id=target_agent.node_id,
+        target_node_id=target_node.node_id,
         content=message_content,
     )
 
     logger.info(
         "Routing prompt to %s (%s)",
-        target_agent.node_name,
-        target_agent.node_id,
+        target_node.node_name,
+        target_node.node_id,
     )
 
     try:
-        response = await target_agent.receive_prompt(payload)
+        response = await target_node.receive_prompt(payload)
 
         # Log the communication
         await LogRepository.log_communication(
             sender="ground_control",
-            recipient=target_agent.node_id,
+            recipient=target_node.node_id,
             message=message_content,
         )
         await LogRepository.log_communication(
-            sender=target_agent.node_id,
+            sender=target_node.node_id,
             recipient="ground_control",
             message=response.content,
         )
 
         # Publish agent response event
         bus = get_event_bus()
-        await bus.publish(TelemetryEvent(
-            event_type=TelemetryEventType.AGENT_RESPONSE,
-            source_node_id=target_agent.node_id,
+        await bus.publish(SensoriumEvent(
+            event_type=SensoriumEventType.NODE_RESPONSE,
+            source_node_id=target_node.node_id,
             data={
                 "content": response.content,
                 "telemetry": response.telemetry.model_dump(mode="json"),
-                "proposed_actions_count": len(response.proposed_actions),
+                "proposed_actions_count": len(response.action_proposals),
             },
         ))
 
-        display_text = format_agent_response(response)
+        display_text = format_node_response(response)
         return response, display_text
 
     except Exception:
         logger.exception(
             "Agent %s failed to process prompt",
-            target_agent.node_id,
+            target_node.node_id,
         )
 
         # Publish error event
         bus = get_event_bus()
-        await bus.publish(TelemetryEvent(
-            event_type=TelemetryEventType.ERROR,
-            source_node_id=target_agent.node_id,
+        await bus.publish(SensoriumEvent(
+            event_type=SensoriumEventType.ERROR,
+            source_node_id=target_node.node_id,
             data={"message": f"Failed to process prompt: {message_content[:100]}"},
         ))
 
         error_text = (
-            f"❌ **Agent `{target_agent.node_name}` failed to process "
+            f"❌ **Agent `{target_node.node_name}` failed to process "
             f"the prompt.** The error has been logged."
         )
         return None, error_text
@@ -172,7 +172,7 @@ async def handle_triadic_prompt(
     except ImportError:
         return None, "❌ Triadic graph module not available."
         
-    from singularity.neural_core.node_registry import initialize_constellation, get_all_agents
+    from singularity.neural_core.node_registry import initialize_constellation, get_all_nodes
     from singularity.memory_vault.database import init_database
     import singularity.cognitive_nodes
 
@@ -181,7 +181,7 @@ async def handle_triadic_prompt(
     except Exception:
         pass
 
-    if not get_all_agents():
+    if not get_all_nodes():
         initialize_constellation()
 
     if _triadic_graph is None:
@@ -195,7 +195,7 @@ async def handle_triadic_prompt(
         response = final_state.get("final_response") if isinstance(final_state, dict) else None
         
         if isinstance(response, CognitiveOutput):
-            display_text = format_agent_response(response)
+            display_text = format_node_response(response)
         else:
             display_text = "### 📐 Triadic Architecture Update\nGraph execution completed successfully."
             
@@ -234,7 +234,7 @@ async def handle_triadic_interrupt_response(
         response = final_state.get("final_response") if isinstance(final_state, dict) else None
         
         if isinstance(response, CognitiveOutput):
-            display_text = format_agent_response(response)
+            display_text = format_node_response(response)
         else:
             display_text = "### 📐 Triadic Architecture Update\nGraph resumed and completed successfully."
             
@@ -296,7 +296,7 @@ async def handle_sync_prompt_response(
 # Heartbeat trigger
 # ---------------------------------------------------------------------------
 
-async def handle_heartbeat_trigger() -> dict[str, Any]:
+async def handle_pulse_trigger() -> dict[str, Any]:
     """Dispatch a manual heartbeat to all agents in the constellation.
 
     Calls :meth:`process_heartbeat` on every registered agent, collects
@@ -306,7 +306,7 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
         A dictionary with heartbeat results including frame count and
         per-agent status summaries.
     """
-    agents = get_all_agents()
+    agents = get_all_nodes()
     if not agents:
         return {"frames_collected": 0, "agents": [], "error": "No agents available"}
 
@@ -359,7 +359,7 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
 # Response formatting
 # ---------------------------------------------------------------------------
 
-def format_agent_response(response: CognitiveOutput) -> str:
+def format_node_response(response: CognitiveOutput) -> str:
     """Format an CognitiveOutput for display in the Chainlit UI.
 
     Renders the response content, telemetry summary, and any proposed
@@ -400,13 +400,13 @@ def format_agent_response(response: CognitiveOutput) -> str:
     if telemetry.message:
         lines.append(f"  • *{telemetry.message}*")
 
-    if response.proposed_actions:
+    if response.action_proposals:
         lines.append("")
         lines.append(
-            f"⚠️ **{len(response.proposed_actions)} proposed action(s)** "
+            f"⚠️ **{len(response.action_proposals)} proposed action(s)** "
             "require approval:"
         )
-        for action in response.proposed_actions:
+        for action in response.action_proposals:
             lines.append(
                 f"  • `{action.action_type}` — {action.description} "
                 f"(Risk: **{action.risk_level.value}**)"
@@ -415,7 +415,7 @@ def format_agent_response(response: CognitiveOutput) -> str:
     return "\n".join(lines)
 
 
-def format_telemetry(frame: DiagnosticFrame) -> str:
+def format_diagnostics(frame: DiagnosticFrame) -> str:
     """Format a DiagnosticFrame as a compact status string.
 
     Intended for use as inline telemetry annotations in the Chainlit

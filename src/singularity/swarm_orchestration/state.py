@@ -10,9 +10,9 @@ Key design decisions
 --------------------
 * ``messages`` uses the built-in ``add_messages`` reducer so that each
   node can *append* messages without replacing the full list.
-* ``proposed_actions`` and ``pending_interrupts`` use a custom list-
+* ``action_proposals`` and ``pending_interventions`` use a custom list-
   append reducer so actions accumulate across multiple agent hops.
-* Scalar fields (``current_agent``, ``heartbeat_sequence``,
+* Scalar fields (``current_node``, ``pulse_sequence``,
   ``is_interrupted``) use a simple "last-write-wins" reducer.
 """
 
@@ -52,7 +52,7 @@ def _append_list(existing: list[Any], update: list[Any]) -> list[Any]:
     return existing + update
 
 
-def _merge_telemetry(
+def _merge_diagnostics(
     existing: dict[str, DiagnosticFrame],
     update: dict[str, DiagnosticFrame],
 ) -> dict[str, DiagnosticFrame]:
@@ -106,17 +106,17 @@ class ConstellationState:
         messages: Conversation message history.  Uses LangGraph's
             built-in ``add_messages`` reducer to append new messages
             while deduplicating by ID.
-        current_agent: ID of the agent currently being executed (or
+        current_node: ID of the agent currently being executed (or
             about to be executed).  Last-write-wins.
         routing_history: Ordered list of agent IDs visited during this
             graph invocation.  Appended via list concatenation.
-        proposed_actions: Actions proposed by agents that may require
+        action_proposals: Actions proposed by agents that may require
             C2 approval.  Accumulated across nodes.
-        pending_interrupts: Interrupt requests that have not yet been
+        pending_interventions: Interrupt requests that have not yet been
             resolved.  Accumulated across nodes.
-        telemetry_frames: Latest telemetry snapshot per agent.  Merged
+        diagnostic_frames: Latest telemetry snapshot per agent.  Merged
             by agent ID so newer frames overwrite older ones.
-        heartbeat_sequence: Monotonically increasing heartbeat counter
+        pulse_sequence: Monotonically increasing heartbeat counter
             from the Mission Scheduler.  Last-write-wins.
         is_interrupted: ``True`` when the graph is paused awaiting C2
             operator resolution of an interrupt.  Last-write-wins.
@@ -126,12 +126,12 @@ class ConstellationState:
     # ``StateGraph`` can introspect the fields and their reducers.
     __annotations__ = {
         "messages": Annotated[list[BaseMessage], add_messages],
-        "current_agent": str,
+        "current_node": str,
         "routing_history": Annotated[list[str], operator.add],
-        "proposed_actions": Annotated[list[ActionProposal], _append_list],
-        "pending_interrupts": Annotated[list[C2InterventionRequest], _append_list],
-        "telemetry_frames": Annotated[dict[str, DiagnosticFrame], _merge_telemetry],
-        "heartbeat_sequence": int,
+        "action_proposals": Annotated[list[ActionProposal], _append_list],
+        "pending_interventions": Annotated[list[C2InterventionRequest], _append_list],
+        "diagnostic_frames": Annotated[dict[str, DiagnosticFrame], _merge_diagnostics],
+        "pulse_sequence": int,
         "is_interrupted": bool,
     }
 
@@ -145,10 +145,10 @@ class TriadicState:
         security_verdict: 'CLEAR' or 'THREAT'.
         route_decision: 'self_handle' or 'synthesis'.
         synthesis_output: Output from the Synthesis node.
-        proposed_actions: Actions proposed by agents. Accumulated.
+        action_proposals: Actions proposed by agents. Accumulated.
         interrupt_payload: Merged dictionary containing interrupt data.
         memory_summary: Compressed context from Orchestrator.
-        heartbeat_sequence: Monotonically increasing heartbeat counter.
+        pulse_sequence: Monotonically increasing heartbeat counter.
         is_interrupted: ``True`` when the graph is paused awaiting C2.
     """
 
@@ -158,22 +158,22 @@ class TriadicState:
         "security_verdict": str,
         "route_decision": str,
         "synthesis_output": str,
-        "proposed_actions": Annotated[list[ActionProposal], _append_list],
+        "action_proposals": Annotated[list[ActionProposal], _append_list],
         "interrupt_payload": Annotated[dict[str, Any], _merge_dict],
         "memory_summary": str,
-        "heartbeat_sequence": int,
+        "pulse_sequence": int,
         "is_interrupted": bool,
     }
 
 
 # Re-export annotations at module level for external introspection.
 messages: Annotated[list[BaseMessage], add_messages]
-current_agent: str
+current_node: str
 routing_history: Annotated[list[str], operator.add]
-proposed_actions: Annotated[list[ActionProposal], _append_list]
-pending_interrupts: Annotated[list[C2InterventionRequest], _append_list]
-telemetry_frames: Annotated[dict[str, DiagnosticFrame], _merge_telemetry]
-heartbeat_sequence: int
+action_proposals: Annotated[list[ActionProposal], _append_list]
+pending_interventions: Annotated[list[C2InterventionRequest], _append_list]
+diagnostic_frames: Annotated[dict[str, DiagnosticFrame], _merge_diagnostics]
+pulse_sequence: int
 is_interrupted: bool
 
 current_payload: str

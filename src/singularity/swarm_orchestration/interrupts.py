@@ -30,7 +30,8 @@ from singularity.neural_core.node_base import (
     DiagnosticFrame,
     NodeStatus,
 )
-from singularity.swarm_orchestration.graph import resume_after_interrupt
+# NOTE: resume_after_interrupt is imported lazily inside resume_execution()
+# to avoid an eager dependency on langgraph.checkpoint.sqlite.aio.
 from singularity.memory_vault.repository import StateRepository
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ class InterruptHandler:
         )
 
         # 3. Publish telemetry event for the interrupt
-        self._emit_interrupt_telemetry(interrupt_request)
+        self._emit_intervention_event(interrupt_request)
 
         return state_id
 
@@ -294,6 +295,7 @@ class InterruptHandler:
             resolution,
         )
 
+        from singularity.swarm_orchestration.graph import resume_after_interrupt
         result = await resume_after_interrupt(
             compiled_graph=self.compiled_graph,
             thread_id=thread_id,
@@ -343,7 +345,7 @@ class InterruptHandler:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _emit_interrupt_telemetry(irq: C2InterventionRequest) -> None:
+    def _emit_intervention_event(irq: C2InterventionRequest) -> None:
         """Publish a telemetry event for an interrupt.
 
         Currently logs the telemetry event.  In a production system
