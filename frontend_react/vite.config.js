@@ -13,6 +13,11 @@ export default defineConfig({
         target: 'ws://localhost:4000',
         ws: true,
       },
+      '/docs-api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/docs-api/, ''),
+      },
     },
   },
 });

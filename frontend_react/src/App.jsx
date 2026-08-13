@@ -8,6 +8,7 @@ import Monetization from './components/Monetization';
 import Sandbox from './components/VR/Sandbox';
 import LibraryPage from './pages/LibraryPage';
 import LanguageSimulation from './components/LanguageSimulation';
+import DocumentationRAG from './components/DocumentationRAG';
 
 function App() {
   const [data, setData] = useState(0);
@@ -46,6 +47,7 @@ function App() {
             <NavLink to="/media" className={navItemClass}>[MEDIA SYNTH]</NavLink>
             <NavLink to="/audio" className={navItemClass}>[AUDIO DAW]</NavLink>
             <NavLink to="/vr" className={navItemClass}>[WEBXR SANDBOX]</NavLink>
+            <NavLink to="/docs" className={navItemClass}>[DOCS RAG]</NavLink>
             <NavLink to="/library" className={navItemClass}>[LIBRARY]</NavLink>
             <NavLink to="/store" className={navItemClass}>[STORE]</NavLink>
           </div>
@@ -85,6 +87,7 @@ function App() {
             <Route path="/media" element={<MediaEngine />} />
             <Route path="/audio" element={<AudioDAW />} />
             <Route path="/vr" element={<Sandbox />} />
+            <Route path="/docs" element={<DocumentationRAG />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/store" element={<Monetization />} />
           </Routes>
