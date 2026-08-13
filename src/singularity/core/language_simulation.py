@@ -15,7 +15,7 @@ from singularity.persistence.models import (
 logger = logging.getLogger(__name__)
 
 async def evaluate_end_condition(client: genai.Client, condition: str, history_text: str) -> bool:
-    """Evaluate if the end condition has been met."""
+    """Evaluate if the end condition has been met (Stateless)."""
     prompt = (
         f"You are an evaluator for a simulation.\n"
         f"Based on the following history of a conversation, has this condition been met?\n"
@@ -39,7 +39,7 @@ async def evaluate_end_condition(client: genai.Client, condition: str, history_t
 import json
 
 async def generate_interjection_intent(client: genai.Client, agent_name: str, system_prompt: str, history_text: str) -> dict[str, Any]:
-    """Poll an agent to see if they want to interject."""
+    """Poll an agent to see if they want to interject (Stateless intent polling)."""
     prompt = (
         f"You are {agent_name}. Your system prompt is:\n{system_prompt}\n\n"
         f"Here is the history of the simulation so far:\n{history_text}\n\n"
@@ -54,7 +54,6 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
             contents=prompt,
         )
         text = response.text.strip()
-        # Clean up markdown code blocks if present
         if text.startswith("```json"):
             text = text[7:]
         if text.startswith("```"):
@@ -67,7 +66,7 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
         return {"intent": "PASS"}
 
 async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig) -> None:
-    """Run the non-linear event-driven loop for a language-based simulation."""
+    """Run the non-linear event-driven loop for a language-based simulation using Interactions API."""
     logger.info(f"Starting non-linear simulation loop for session {session_id}")
     
     client = genai.Client()
@@ -78,7 +77,6 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
         return
         
     try:
-        # Load existing messages if any
         history: list[dict[str, Any]] = []
         async with get_session() as db:
             seed_msg = SimulationMessage(
@@ -91,11 +89,11 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
         history.append({"sender": "system", "content": config.seed_prompt})
         
         fifo_counter = 0
+        canonical_interaction_id = None
         
         while True:
             history_text = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in history])
             
-            # Poll all agents concurrently
             logger.info(f"Polling {len(agents_config)} agents for interjection intents...")
             tasks = [
                 generate_interjection_intent(
@@ -108,7 +106,6 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
             ]
             
             intents = await asyncio.gather(*tasks)
-            
             queue = asyncio.PriorityQueue()
             
             for agent, intent in zip(agents_config, intents):
@@ -120,38 +117,61 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                         priority = 5
                     message = intent.get("message", "")
                     if message:
-                        # Negate priority so higher numbers pop first
                         await queue.put((-priority, fifo_counter, agent_name, message))
                         fifo_counter += 1
                         
             if queue.empty():
                 logger.info("Deadlock: Queue empty. Forcing first agent to speak.")
-                # Force first agent
                 agent = agents_config[0]
                 agent_name = agent.get("name", "UnknownAgent")
                 system_prompt = agent.get("system_prompt", "")
                 
-                force_prompt = (
-                    f"You are {agent_name}. Your system prompt is:\n{system_prompt}\n\n"
-                    f"Here is the history of the simulation so far:\n{history_text}\n\n"
-                    f"The conversation has stalled. Provide your next response. Do not prefix your response with your name."
-                )
+                # Execute canonical turn
                 try:
-                    response = await asyncio.to_thread(
-                        client.models.generate_content,
-                        model="gemini-2.5-flash-8b",
-                        contents=force_prompt,
-                    )
+                    kwargs = {
+                        "model": "gemini-2.5-flash-8b",
+                        "contents": "The conversation has stalled. Provide your next response.",
+                        "config": {"system_instruction": system_prompt, "store": True}
+                    }
+                    if canonical_interaction_id:
+                        kwargs["config"]["previous_interaction_id"] = canonical_interaction_id
+                    else:
+                        kwargs["contents"] = f"History:\n{history_text}\n\n" + kwargs["contents"]
+                        
+                    response = await asyncio.to_thread(client.interactions.create, **kwargs)
                     reply = response.text.strip()
+                    canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
                     await queue.put((-10, fifo_counter, agent_name, reply))
                     fifo_counter += 1
                 except Exception as e:
                     logger.error(f"Error forcing response: {e}")
-                    return # fatal
+                    return
 
-            # Pop highest priority message
             neg_prio, _, winner_name, winner_message = await queue.get()
             logger.info(f"Agent {winner_name} interjects with priority {-neg_prio}")
+            
+            # If it wasn't a forced turn, we need to append the winning message to the canonical interaction
+            if neg_prio != -10:
+                agent = next((a for a in agents_config if a.get("name") == winner_name), agents_config[0])
+                system_prompt = agent.get("system_prompt", "")
+                
+                try:
+                    kwargs = {
+                        "model": "gemini-2.5-flash-8b",
+                        "contents": f"Your generated interjection was: {winner_message}\nAccept this as your turn and continue.",
+                        "config": {"system_instruction": system_prompt, "store": True}
+                    }
+                    if canonical_interaction_id:
+                        kwargs["config"]["previous_interaction_id"] = canonical_interaction_id
+                    else:
+                        kwargs["contents"] = f"History:\n{history_text}\n\n" + kwargs["contents"]
+                        
+                    response = await asyncio.to_thread(client.interactions.create, **kwargs)
+                    # We don't use response.text here because the message was already generated by the intent poll.
+                    # This call merely advances the server-side state.
+                    canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
+                except Exception as e:
+                    logger.error(f"Error updating canonical interaction state: {e}")
             
             async with get_session() as db:
                 new_msg = SimulationMessage(
@@ -162,9 +182,6 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 db.add(new_msg)
                 
             history.append({"sender": winner_name, "content": winner_message})
-            
-            # The remaining items in the queue are intentionally discarded (flushed) 
-            # so agents must re-evaluate the new context on the next iteration.
             
             if config.end_state_condition:
                 new_history_text = "\n".join([f"{m['sender']}: {m['content']}" for m in history])
