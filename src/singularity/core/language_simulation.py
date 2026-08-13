@@ -36,21 +36,45 @@ async def evaluate_end_condition(client: genai.Client, condition: str, history_t
         logger.error(f"Error evaluating end condition: {e}")
         return False
 
+import json
+
+async def generate_interjection_intent(client: genai.Client, agent_name: str, system_prompt: str, history_text: str) -> dict[str, Any]:
+    """Poll an agent to see if they want to interject."""
+    prompt = (
+        f"You are {agent_name}. Your system prompt is:\n{system_prompt}\n\n"
+        f"Here is the history of the simulation so far:\n{history_text}\n\n"
+        f"Do you want to speak next? If you have nothing to say, output exactly: {{\"intent\": \"PASS\"}}\n"
+        f"If you want to interject, output a JSON object: {{\"intent\": \"INTERJECT\", \"priority\": <1-10>, \"message\": \"<your response>\"}}\n"
+        f"Higher priority (10) means it is urgent for you to speak. Output ONLY valid JSON."
+    )
+    try:
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        text = response.text.strip()
+        # Clean up markdown code blocks if present
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.error(f"Error getting intent for {agent_name}: {e}")
+        return {"intent": "PASS"}
 
 async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig) -> None:
-    """Run the main loop for a language-based simulation.
-    
-    Args:
-        session_id: The ID of the simulation session.
-        config: The configuration for the simulation.
-    """
-    logger.info(f"Starting language simulation loop for session {session_id}")
+    """Run the non-linear event-driven loop for a language-based simulation."""
+    logger.info(f"Starting non-linear simulation loop for session {session_id}")
     
     client = genai.Client()
     
     agents_config = config.agents_config
-    if not isinstance(agents_config, list):
-        logger.error(f"agents_config must be a list, got {type(agents_config)}")
+    if not isinstance(agents_config, list) or len(agents_config) == 0:
+        logger.error(f"agents_config must be a non-empty list")
         return
         
     try:
@@ -66,50 +90,88 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
             
         history.append({"sender": "system", "content": config.seed_prompt})
         
+        fifo_counter = 0
+        
         while True:
-            for agent in agents_config:
+            history_text = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in history])
+            
+            # Poll all agents concurrently
+            logger.info(f"Polling {len(agents_config)} agents for interjection intents...")
+            tasks = [
+                generate_interjection_intent(
+                    client, 
+                    agent.get("name", "UnknownAgent"), 
+                    agent.get("system_prompt", ""), 
+                    history_text
+                )
+                for agent in agents_config
+            ]
+            
+            intents = await asyncio.gather(*tasks)
+            
+            queue = asyncio.PriorityQueue()
+            
+            for agent, intent in zip(agents_config, intents):
+                agent_name = agent.get("name", "UnknownAgent")
+                if intent.get("intent") == "INTERJECT":
+                    try:
+                        priority = int(intent.get("priority", 5))
+                    except ValueError:
+                        priority = 5
+                    message = intent.get("message", "")
+                    if message:
+                        # Negate priority so higher numbers pop first
+                        await queue.put((-priority, fifo_counter, agent_name, message))
+                        fifo_counter += 1
+                        
+            if queue.empty():
+                logger.info("Deadlock: Queue empty. Forcing first agent to speak.")
+                # Force first agent
+                agent = agents_config[0]
                 agent_name = agent.get("name", "UnknownAgent")
                 system_prompt = agent.get("system_prompt", "")
                 
-                logger.info(f"Generating turn for agent {agent_name} in session {session_id}")
-                
-                history_text = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in history])
-                
-                agent_prompt = (
+                force_prompt = (
                     f"You are {agent_name}. Your system prompt is:\n{system_prompt}\n\n"
                     f"Here is the history of the simulation so far:\n{history_text}\n\n"
-                    f"Please provide your next response in the conversation. Do not prefix your response with your name, just provide your reply."
+                    f"The conversation has stalled. Provide your next response. Do not prefix your response with your name."
                 )
-                
                 try:
                     response = await asyncio.to_thread(
                         client.models.generate_content,
                         model="gemini-2.5-flash",
-                        contents=agent_prompt,
+                        contents=force_prompt,
                     )
                     reply = response.text.strip()
-                    
-                    async with get_session() as db:
-                        new_msg = SimulationMessage(
-                            session_id=session_id,
-                            sender=agent_name,
-                            content=reply
-                        )
-                        db.add(new_msg)
-                        
-                    history.append({"sender": agent_name, "content": reply})
-                    
-                    if config.end_state_condition:
-                        new_history_text = "\n".join([f"{m['sender']}: {m['content']}" for m in history])
-                        met = await evaluate_end_condition(client, config.end_state_condition, new_history_text)
-                        if met:
-                            logger.info(f"End condition met for session {session_id}. Terminating simulation.")
-                            return
-                            
+                    await queue.put((-10, fifo_counter, agent_name, reply))
+                    fifo_counter += 1
                 except Exception as e:
-                    logger.error(f"Error generating response for agent {agent_name}: {e}")
-                    # Continue to try next agent
-                    continue
+                    logger.error(f"Error forcing response: {e}")
+                    return # fatal
+
+            # Pop highest priority message
+            neg_prio, _, winner_name, winner_message = await queue.get()
+            logger.info(f"Agent {winner_name} interjects with priority {-neg_prio}")
+            
+            async with get_session() as db:
+                new_msg = SimulationMessage(
+                    session_id=session_id,
+                    sender=winner_name,
+                    content=winner_message
+                )
+                db.add(new_msg)
+                
+            history.append({"sender": winner_name, "content": winner_message})
+            
+            # The remaining items in the queue are intentionally discarded (flushed) 
+            # so agents must re-evaluate the new context on the next iteration.
+            
+            if config.end_state_condition:
+                new_history_text = "\n".join([f"{m['sender']}: {m['content']}" for m in history])
+                met = await evaluate_end_condition(client, config.end_state_condition, new_history_text)
+                if met:
+                    logger.info(f"End condition met for session {session_id}. Terminating simulation.")
+                    return
                     
     except Exception as e:
-        logger.error(f"Fatal error in simulation loop for session {session_id}: {e}")
+        logger.error(f"Fatal error in non-linear loop for session {session_id}: {e}")
