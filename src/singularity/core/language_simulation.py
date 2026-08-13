@@ -19,6 +19,8 @@ from singularity.core.github_tools import SWARM_TOOLS
 
 logger = logging.getLogger(__name__)
 
+active_shutdown_signals = set()
+
 def parse_content_to_parts(content: str) -> list[Any]:
     """Parse JSON string into a list of Gemini Parts for multi-modal support."""
     parts = []
@@ -250,6 +252,19 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
         max_tokens = getattr(config, 'max_tokens', None)
         
         while True:
+            if session_id in active_shutdown_signals:
+                logger.info(f"Kill switch activated for session {session_id}. Terminating.")
+                active_shutdown_signals.remove(session_id)
+                msg = "CRITICAL: Manual kill switch activated. Halting simulation."
+                async with get_session() as db:
+                    limit_msg = SimulationMessage(
+                        session_id=session_id,
+                        sender="SYSTEM_AUDIT",
+                        content=json.dumps([{"text": msg}])
+                    )
+                    db.add(limit_msg)
+                return
+                
             history_parts = build_history_parts(history)
             
             logger.info(f"Polling {len(agents_config)} agents for interjection intents...")

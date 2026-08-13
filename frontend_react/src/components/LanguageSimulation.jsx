@@ -201,6 +201,17 @@ const LanguageSimulation = () => {
     }
   };
 
+  const handleKill = async () => {
+    if (!simId) return;
+    try {
+      await axios.post(`/api/simulations/${simId}/kill`);
+      setIsRunning(false);
+    } catch (err) {
+      console.error('Error stopping simulation:', err);
+      setError('Failed to send kill signal.');
+    }
+  };
+
   const renderContent = (contentString) => {
     try {
       const parts = JSON.parse(contentString);
@@ -389,13 +400,22 @@ const LanguageSimulation = () => {
             >
               {isSpawning ? 'Spawning...' : 'Spawn Simulation'}
             </button>
-            <button
-              onClick={handleRun}
-              disabled={!simId || isRunning}
-              className={`flex-1 py-2 font-bold uppercase tracking-wider border transition-colors ${!simId || isRunning ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-purple-900/30 border-purple-500 text-purple-400 hover:bg-purple-900/50 hover:text-glow-purple'}`}
-            >
-              Run Simulation
-            </button>
+            {!isRunning ? (
+              <button
+                onClick={handleRun}
+                disabled={!simId}
+                className={`flex-1 py-2 font-bold uppercase tracking-wider border transition-colors ${!simId ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-purple-900/30 border-purple-500 text-purple-400 hover:bg-purple-900/50 hover:text-glow-purple'}`}
+              >
+                Run Simulation
+              </button>
+            ) : (
+              <button
+                onClick={handleKill}
+                className="flex-1 py-2 font-bold uppercase tracking-wider border transition-colors bg-red-900/30 border-red-500 text-red-400 hover:bg-red-900/50 hover:text-glow-red"
+              >
+                KILL SWITCH
+              </button>
+            )}
           </div>
           
           {simId && (

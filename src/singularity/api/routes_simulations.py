@@ -272,3 +272,11 @@ async def start_language_simulation(sim_id: str, background_tasks: BackgroundTas
     background_tasks.add_task(run_simulation_loop, sim_id, config)
     
     return {"status": "started", "sim_id": sim_id}
+
+@router.post("/{sim_id}/kill")
+async def kill_simulation(sim_id: str) -> dict[str, Any]:
+    """Signal the active simulation loop to terminate."""
+    from singularity.core.language_simulation import active_shutdown_signals
+    active_shutdown_signals.add(sim_id)
+    logger.info(f"Received kill signal for session {sim_id}")
+    return {"status": "kill_signal_sent", "sim_id": sim_id}
