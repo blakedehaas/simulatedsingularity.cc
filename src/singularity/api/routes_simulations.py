@@ -44,13 +44,10 @@ async def spawn_simulation(request: SpawnRequest) -> dict[str, Any]:
     sim_id = str(uuid.uuid4())
     logger.info(f"Spawning simulation {request.name} (seed {request.seed})")
     
-    # Mock topology based on seed
+    # Initialize empty topology
     snapshot = {
-        "adjacency_matrix": {
-            "execution_node": {"safeguard": 0.8},
-            "safeguard": {"orchestrator": 0.6}
-        },
-        "active_agents": ["execution_node", "safeguard", "orchestrator"]
+        "adjacency_matrix": {},
+        "active_agents": []
     }
     
     async with get_session() as db:

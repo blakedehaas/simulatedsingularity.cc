@@ -66,15 +66,9 @@ async def get_logs(
 ) -> TelemetryLogsResponse:
     """Get paginated telemetry logs."""
     logger.debug(f"Fetching logs with limit={limit}, offset={offset}")
-    # Placeholder for actual log retrieval logic
-    dummy_logs = [
-        TelemetryLogEntry(timestamp="2026-08-13T08:00:00", level="INFO", message="Node starting up", agent_id="orchestrator"),
-        TelemetryLogEntry(timestamp="2026-08-13T08:01:00", level="WARNING", message="Memory pressure detected", agent_id="execution")
-    ]
-    
     return TelemetryLogsResponse(
-        logs=dummy_logs[:limit],
+        logs=[],
         limit=limit,
         offset=offset,
-        total=len(dummy_logs)
+        total=0
     )
