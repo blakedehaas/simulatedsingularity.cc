@@ -5,6 +5,7 @@ description = "Constellation-Class Multi-Agent Command & Control Environment"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph>=0.4",
+    "langgraph-checkpoint-sqlite>=2.0.0",
     "langchain-core>=0.3",
     "apscheduler>=3.11",
     "sqlalchemy>=2.0",
