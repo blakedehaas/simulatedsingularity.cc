@@ -179,32 +179,6 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
                         result = f"Error: Agent '{target_name}' not found."
                 except Exception as e:
                     result = f"Error executing tool: {str(e)}"
-            elif fn_name == "create_pull_request":
-                from singularity.api.routes_console import active_intercepts
-                active_intercepts[session_id] = {"resolved": False, "decision": None, "agent_name": "Developer"}
-                
-                # Block until resolved
-                while session_id in active_intercepts and not active_intercepts[session_id]["resolved"]:
-                    await asyncio.sleep(1)
-                    
-                decision = active_intercepts.get(session_id, {}).get("decision", "deny")
-                if session_id in active_intercepts:
-                    del active_intercepts[session_id]
-                    
-                if decision == "deny":
-                    result = "Error: C2 Ground Control denied this action. The pull request was aborted."
-                else:
-                    tool_func = next((t for t in SWARM_TOOLS if t.__name__ == fn_name), None)
-                    if tool_func:
-                        try:
-                            if isinstance(fn_args, dict):
-                                result = tool_func(**fn_args)
-                            else:
-                                result = tool_func()
-                        except Exception as e:
-                            result = f"Error executing tool: {str(e)}"
-                    else:
-                        result = f"Tool {fn_name} not found"
             else:
                 tool_func = next((t for t in SWARM_TOOLS if t.__name__ == fn_name), None)
                 if tool_func:

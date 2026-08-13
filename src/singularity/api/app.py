@@ -6,7 +6,6 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from singularity.api.routes_telemetry import router as telemetry_router
-from singularity.api.routes_console import router as console_router
 from singularity.api.routes_media import router as media_router
 from singularity.api.routes_audio import router as audio_router
 from singularity.api.routes_sandbox import router as sandbox_router
@@ -40,7 +39,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(telemetry_router)
-app.include_router(console_router)
 app.include_router(media_router)
 app.include_router(audio_router)
 app.include_router(sandbox_router)

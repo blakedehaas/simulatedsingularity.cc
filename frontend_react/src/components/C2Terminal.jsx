@@ -4,7 +4,6 @@ import SwarmVisualizer from './SwarmVisualizer';
 
 const C2Terminal = () => {
   const [telemetry, setTelemetry] = useState([]);
-  const [interceptActive, setInterceptActive] = useState(false);
   const logEndRef = useRef(null);
 
   useEffect(() => {
@@ -14,13 +13,6 @@ const C2Terminal = () => {
         if (res.data) {
           setTelemetry(res.data);
         }
-        
-        const interceptRes = await apiClient.get('/console/intercepts');
-        if (Object.keys(interceptRes.data).length > 0) {
-          setInterceptActive(true);
-        } else {
-          setInterceptActive(false);
-        }
       } catch (err) {
         console.error("Telemetry error", err);
       }
@@ -28,14 +20,7 @@ const C2Terminal = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleResolve = async (action) => {
-    try {
-      await apiClient.post('/console/resolve', { action });
-    } catch (err) {
-      console.error('Intercept resolve error', err);
-    }
-    setInterceptActive(false);
-  };
+
 
   const getAgentColor = (agent) => {
       case 'SYSTEM_AUDIT': return 'text-red-400';
@@ -77,28 +62,6 @@ const C2Terminal = () => {
         </div>
       </div>
 
-      {interceptActive && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="glass-panel p-8 border border-red-500/50 glow-red max-w-md w-full text-center">
-            <h3 className="text-2xl text-red-500 font-bold mb-4 animate-pulse">!! ANOMALY DETECTED !!</h3>
-            <p className="text-gray-300 mb-8">Safeguard agent has halted execution due to anomalous pattern recognition. Manual override required.</p>
-            <div className="flex justify-center space-x-6">
-              <button 
-                onClick={() => handleResolve('approve')}
-                className="px-6 py-2 bg-emerald-900/30 border border-emerald-500 text-emerald-400 hover:bg-emerald-900/50 transition-colors"
-              >
-                APPROVE ACTION
-              </button>
-              <button 
-                onClick={() => handleResolve('deny')}
-                className="px-6 py-2 bg-red-900/30 border border-red-500 text-red-400 hover:bg-red-900/50 transition-colors"
-              >
-                DENY ACTION
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
