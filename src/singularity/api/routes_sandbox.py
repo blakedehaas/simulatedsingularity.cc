@@ -3,6 +3,10 @@ import asyncio
 from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from pydantic import BaseModel
+from singularity.orchestration.evolutionary_engine import mutate_topology
+from singularity.orchestration.swarm_state import SwarmState
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vr", tags=["VR Sandbox"])
@@ -19,10 +23,64 @@ universe_state: dict[str, Any] = {
     }
 }
 
+# In-memory global swarm topology state for API serving
+swarm_topology_state: dict[str, Any] = {
+    "adjacency_matrix": {}
+}
+
 @router.get("/state")
 async def get_state() -> dict[str, Any]:
     """Return the current universe state snapshot."""
     return universe_state
+
+from singularity.orchestration.social_dynamics import detect_clusters, assign_hierarchy
+
+@router.get("/swarm")
+async def get_swarm_topology() -> dict[str, Any]:
+    """Return the current n-dimensional swarm adjacency matrix, along with clusters and leaders."""
+    state_obj = SwarmState(
+        messages=[],
+        active_agents=["execution_node", "safeguard", "orchestrator"],
+        adjacency_matrix=swarm_topology_state.get("adjacency_matrix", {})
+    )
+    
+    clusters = detect_clusters(state_obj)
+    leaders = assign_hierarchy(state_obj, clusters)
+    
+    # Format clusters for JSON serialization (sets to lists)
+    swarm_topology_state["clusters"] = [list(c) for c in clusters]
+    swarm_topology_state["leaders"] = leaders
+    
+    return swarm_topology_state
+
+class MutateRequest(BaseModel):
+    feedback_reward: float
+    source: str
+    target: str
+
+@router.post("/swarm/mutate")
+async def mutate_swarm_topology(request: MutateRequest) -> dict[str, Any]:
+    """Manually trigger a mutation on the swarm topology."""
+    global swarm_topology_state
+    
+    # Convert dict to SwarmState for mutation
+    state_obj = SwarmState(
+        messages=[],
+        active_agents=["execution_node", request.source, request.target],
+        adjacency_matrix=swarm_topology_state.get("adjacency_matrix", {})
+    )
+    
+    new_state = mutate_topology(
+        state=state_obj, 
+        feedback_reward=request.feedback_reward, 
+        source=request.source, 
+        target=request.target
+    )
+    
+    # Update global dict
+    swarm_topology_state["adjacency_matrix"] = new_state.adjacency_matrix
+    
+    return swarm_topology_state
 
 @router.websocket("/sync")
 async def websocket_sync(websocket: WebSocket) -> None:

@@ -268,3 +268,56 @@ class MemorySummaryRecord(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now
     )
+
+
+class SimulationSession(Base):
+    """Saved Visualizer Simulation Session.
+
+    Attributes:
+        id: Primary key — string UUID.
+        name: Name of the simulation.
+        seed: Deterministic seed integer.
+        topology_snapshot: JSON representation of the swarm topology.
+        created_at: When the session was saved.
+    """
+
+    __tablename__ = "simulation_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    topology_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+
+    # Relationships
+    messages: Mapped[list[SimulationMessage]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+class SimulationMessage(Base):
+    """Immutable chat history for a simulation session.
+
+    Attributes:
+        id: Primary key — auto-incrementing integer.
+        session_id: Foreign key to the simulation session.
+        sender: The agent or user who sent the message.
+        content: The text content of the message.
+        timestamp: When the message was created.
+    """
+
+    __tablename__ = "simulation_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("simulation_sessions.id"), nullable=False
+    )
+    sender: Mapped[str] = mapped_column(String(128), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+
+    # Relationships
+    session: Mapped[SimulationSession] = relationship(back_populates="messages")

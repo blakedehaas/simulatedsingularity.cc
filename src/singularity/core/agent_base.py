@@ -161,6 +161,24 @@ class InterruptRequest(BaseModel):
     resolved_at: datetime | None = None
 
 
+class ConnectionFeedback(BaseModel):
+    """Feedback emitted by an agent to adjust the dynamic weight/affinity with another agent.
+
+    Attributes:
+        source_agent_id: The agent issuing the feedback.
+        target_agent_id: The agent being evaluated.
+        utility_score: A float (e.g., -1.0 to 1.0) indicating the usefulness of the target's output.
+        reason: Optional text explanation for the feedback.
+        timestamp: When the feedback was generated.
+    """
+
+    source_agent_id: str
+    target_agent_id: str
+    utility_score: float
+    reason: str = ""
+    timestamp: datetime = Field(default_factory=_utc_now)
+
+
 class AgentResponse(BaseModel):
     """Response produced by an agent after processing a prompt.
 
@@ -169,6 +187,7 @@ class AgentResponse(BaseModel):
         content: Textual response content.
         telemetry: Current telemetry snapshot.
         proposed_actions: Any state-mutating actions the agent wants to perform.
+        connection_feedback: Feedback to update graph routing weights.
         metadata: Arbitrary response metadata.
         timestamp: When the response was generated.
     """
@@ -177,6 +196,7 @@ class AgentResponse(BaseModel):
     content: str
     telemetry: TelemetryFrame
     proposed_actions: list[ProposedAction] = Field(default_factory=list)
+    connection_feedback: list[ConnectionFeedback] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=_utc_now)
 
@@ -234,7 +254,13 @@ class AsyncBaseAgent(ABC):
         if model and hasattr(model, "system_prompt"):
             original_prompt = model.system_prompt
             context_str = "\n".join(self._scratchpad)
-            model.system_prompt = f"{original_prompt}\n\n[Agent Scratchpad Context]:\n{context_str}"
+            
+            oversight_prompt = ""
+            leaders = payload.metadata.get("leaders", [])
+            if self.agent_id in leaders:
+                oversight_prompt = "\nYou have emerged as the central consensus node of your cluster. Your role is now Oversight and Alignment. Synthesize the incoming intelligence from your subordinates and direct the hive toward the global objective.\n"
+                
+            model.system_prompt = f"{original_prompt}{oversight_prompt}\n\n[Agent Scratchpad Context]:\n{context_str}"
 
         try:
             response = await self.handle_prompt(payload)
