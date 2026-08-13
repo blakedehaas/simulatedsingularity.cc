@@ -29,6 +29,7 @@ class LanguageSpawnRequest(BaseModel):
     end_state_condition: str
     agents_config: list[dict[str, Any]]
     verbose_mode: bool = False
+    max_tokens: int | None = None
 
 class ImportRequest(BaseModel):
     version: str
@@ -173,6 +174,7 @@ async def export_simulation(sim_id: str) -> dict[str, Any]:
         "simulation": {
             "name": f"Export of {session.name}",
             "verbose_mode": getattr(config, 'verbose_mode', False) if config else False,
+            "max_tokens": getattr(config, 'max_tokens', None) if config else None,
             "seed_prompt": config.seed_prompt if config else "",
             "end_state_condition": config.end_state_condition if config else "",
             "agents_config": config.agents_config if config else []
@@ -209,7 +211,8 @@ async def import_simulation(request: ImportRequest) -> dict[str, Any]:
             seed_prompt=sim_data.get("seed_prompt", ""),
             end_state_condition=sim_data.get("end_state_condition", ""),
             agents_config=agents_config,
-            verbose_mode=sim_data.get("verbose_mode", False)
+            verbose_mode=sim_data.get("verbose_mode", False),
+            max_tokens=sim_data.get("max_tokens", None)
         )
         
         db.add(session)
@@ -249,7 +252,8 @@ async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, 
             seed_prompt=request.seed_prompt,
             end_state_condition=request.end_state_condition,
             agents_config=request.agents_config,
-            verbose_mode=request.verbose_mode
+            verbose_mode=request.verbose_mode,
+            max_tokens=request.max_tokens
         )
         
         db.add(session)

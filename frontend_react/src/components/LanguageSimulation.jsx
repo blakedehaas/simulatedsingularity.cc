@@ -7,6 +7,7 @@ const LanguageSimulation = () => {
   const [verboseMode, setVerboseMode] = useState(false);
   
   const [endStateCondition, setEndStateCondition] = useState('');
+  const [maxTokens, setMaxTokens] = useState('');
   const [agents, setAgents] = useState([{ name: '', system_prompt: '', model: 'gemini-2.5-flash-8b' }]);
   const [simId, setSimId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -116,7 +117,8 @@ const LanguageSimulation = () => {
         seed_prompt: JSON.stringify(finalSeedPrompt),
         end_state_condition: endStateCondition,
         agents_config: agents.filter(a => a.name.trim() !== '' && a.system_prompt.trim() !== ''),
-        verbose_mode: verboseMode
+        verbose_mode: verboseMode,
+        max_tokens: maxTokens ? parseInt(maxTokens) : null
       };
       
       const res = await axios.post('/api/simulations/language/spawn', payload);
@@ -173,6 +175,7 @@ const LanguageSimulation = () => {
         }
         
         setEndStateCondition(sim.end_state_condition || '');
+        setMaxTokens(sim.max_tokens || '');
         setVerboseMode(sim.verbose_mode || false);
         if (sim.agents_config) {
           setAgents(sim.agents_config);
@@ -308,6 +311,17 @@ const LanguageSimulation = () => {
               onChange={(e) => setEndStateCondition(e.target.value)}
               className="bg-black/50 border border-gray-700 rounded p-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors h-24 resize-none"
               placeholder="Condition under which the simulation halts..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 mt-2">
+            <label className="text-xs uppercase text-gray-500">Max Tokens (Optional)</label>
+            <input 
+              type="number"
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(e.target.value)}
+              className="bg-black/50 border border-gray-700 rounded p-2 text-sm focus:border-cyan-500 focus:outline-none transition-colors"
+              placeholder="Leave blank for infinite"
             />
           </div>
 

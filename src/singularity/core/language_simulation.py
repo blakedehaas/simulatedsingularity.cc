@@ -89,7 +89,7 @@ async def evaluate_end_condition(client: genai.Client, condition: str, history_p
         logger.error(f"Error evaluating end condition: {e}")
         return False
 
-async def generate_interjection_intent(client: genai.Client, agent_name: str, system_prompt: str, history_parts: list[Any], verbose_mode: bool) -> dict[str, Any]:
+async def generate_interjection_intent(client: genai.Client, agent_name: str, system_prompt: str, history_parts: list[Any], verbose_mode: bool) -> tuple[dict[str, Any], int]:
     """Poll an agent to see if they want to interject (Stateless intent polling unless verbose)."""
     prompt_text = (
         f"Do you want to speak next? If you have nothing to say, output exactly: {{\"intent\": \"PASS\"}}\n"
@@ -115,10 +115,11 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
-        return json.loads(text.strip())
+        tokens = response.usage_metadata.total_token_count if hasattr(response, 'usage_metadata') and response.usage_metadata else 0
+        return json.loads(text.strip()), tokens
     except Exception as e:
         logger.error(f"Error getting intent for {agent_name}: {e}")
-        return {"intent": "PASS"}
+        return {"intent": "PASS"}, 0
 
 async def _execute_turn_with_tools(client, agent_model, system_prompt, content_str, canonical_interaction_id, history_parts, config, session_id):
     kwargs = {
@@ -136,6 +137,7 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
         kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + content_str)]
         
     response = await asyncio.to_thread(client.interactions.create, **kwargs)
+    tokens_used = response.usage_metadata.total_token_count if hasattr(response, 'usage_metadata') and response.usage_metadata else 0
     
     # Loop to handle consecutive function calls
     while response.function_calls:
@@ -211,10 +213,12 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
             }
         }
         response = await asyncio.to_thread(client.interactions.create, **fn_resp_kwargs)
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            tokens_used += response.usage_metadata.total_token_count
         
     winner_message = serialize_response_parts(response)
     new_canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
-    return winner_message, new_canonical_interaction_id
+    return winner_message, new_canonical_interaction_id, tokens_used
 
 async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig) -> None:
     """Run the non-linear event-driven loop for a language-based simulation using Interactions API."""
@@ -242,6 +246,8 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
         fifo_counter = 0
         canonical_interaction_id = None
         verbose_mode = getattr(config, 'verbose_mode', False)
+        total_tokens = 0
+        max_tokens = getattr(config, 'max_tokens', None)
         
         while True:
             history_parts = build_history_parts(history)
@@ -258,7 +264,11 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 for agent in agents_config
             ]
             
-            intents = await asyncio.gather(*tasks)
+            intents_and_tokens = await asyncio.gather(*tasks)
+            intents = [it[0] for it in intents_and_tokens]
+            for it in intents_and_tokens:
+                total_tokens += it[1]
+            
             queue = asyncio.PriorityQueue()
             
             for agent, intent in zip(agents_config, intents):
@@ -281,9 +291,10 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
-                    winner_message, canonical_interaction_id = await _execute_turn_with_tools(
+                    winner_message, canonical_interaction_id, turn_tokens = await _execute_turn_with_tools(
                         client, agent_model, system_prompt, "The conversation has stalled. Provide your next response.", canonical_interaction_id, history_parts, config, session_id
                     )
+                    total_tokens += turn_tokens
                     await queue.put((-10, fifo_counter, agent_name, winner_message))
                     fifo_counter += 1
                 except Exception as e:
@@ -299,9 +310,10 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
-                    winner_message, canonical_interaction_id = await _execute_turn_with_tools(
+                    winner_message, canonical_interaction_id, turn_tokens = await _execute_turn_with_tools(
                         client, agent_model, system_prompt, "It is your turn to speak.", canonical_interaction_id, history_parts, config, session_id
                     )
+                    total_tokens += turn_tokens
                 except Exception as e:
                     logger.error(f"Error updating canonical interaction state: {e}")
                     return
@@ -323,6 +335,18 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 if met:
                     logger.info(f"End condition met for session {session_id}. Terminating simulation.")
                     return
+                    
+            if max_tokens is not None and total_tokens >= max_tokens:
+                msg = f"CRITICAL: Maximum token limit reached ({total_tokens} >= {max_tokens}). Halting simulation."
+                logger.warning(msg)
+                async with get_session() as db:
+                    limit_msg = SimulationMessage(
+                        session_id=session_id,
+                        sender="SYSTEM_AUDIT",
+                        content=json.dumps([{"text": msg}])
+                    )
+                    db.add(limit_msg)
+                return
                     
     except Exception as e:
         logger.error(f"Fatal error in non-linear loop for session {session_id}: {e}")
