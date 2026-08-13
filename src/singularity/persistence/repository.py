@@ -23,6 +23,8 @@ from singularity.persistence.models import (
     ExecutionStateRecord,
     ScheduledTaskRecord,
     SyncPromptRecord,
+    AgentScratchpadLog,
+    MemorySummaryRecord,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,6 +159,28 @@ class AgentRepository:
                 .limit(limit)
             )
             return list(result.scalars().all())
+
+    @staticmethod
+    async def append_scratchpad_log(
+        agent_id: str,
+        entry_text: str,
+    ) -> AgentScratchpadLog:
+        """Append a raw context entry to an agent's scratchpad log.
+
+        Args:
+            agent_id: The agent's unique identifier.
+            entry_text: The raw uncompacted text.
+
+        Returns:
+            The created ``AgentScratchpadLog``.
+        """
+        async with get_session() as session:
+            record = AgentScratchpadLog(
+                agent_id=agent_id,
+                entry_text=entry_text,
+            )
+            session.add(record)
+            return record
 
 
 # ---------------------------------------------------------------------------
@@ -453,3 +477,79 @@ class StateRepository:
                     resolved_at=_utc_now(),
                 )
             )
+
+# ---------------------------------------------------------------------------
+# Memory Repository
+# ---------------------------------------------------------------------------
+
+class MemoryRepository:
+    """Operations for compacted interaction memory summaries."""
+
+    @staticmethod
+    async def save_summary(
+        agent_id: str,
+        summary_text: str,
+        heartbeat_sequence: int,
+        entries_compacted: int = 0,
+    ) -> MemorySummaryRecord:
+        """Save a new memory summary record.
+
+        Args:
+            agent_id: Identifier of the agent.
+            summary_text: The compacted text.
+            heartbeat_sequence: Heartbeat sequence number at time of compaction.
+            entries_compacted: Number of scratchpad entries rolled up.
+
+        Returns:
+            The created ``MemorySummaryRecord``.
+        """
+        async with get_session() as session:
+            record = MemorySummaryRecord(
+                agent_id=agent_id,
+                summary_text=summary_text,
+                heartbeat_sequence=heartbeat_sequence,
+                entries_compacted=entries_compacted,
+            )
+            session.add(record)
+            return record
+
+    @staticmethod
+    async def get_latest_summary(agent_id: str) -> MemorySummaryRecord | None:
+        """Get the most recent memory summary for an agent.
+
+        Args:
+            agent_id: Identifier of the agent.
+
+        Returns:
+            The latest ``MemorySummaryRecord`` if found, else ``None``.
+        """
+        async with get_session() as session:
+            result = await session.execute(
+                select(MemorySummaryRecord)
+                .where(MemorySummaryRecord.agent_id == agent_id)
+                .order_by(MemorySummaryRecord.timestamp.desc())
+                .limit(1)
+            )
+            return result.scalars().first()
+
+    @staticmethod
+    async def get_summaries(
+        agent_id: str, limit: int = 10
+    ) -> list[MemorySummaryRecord]:
+        """Get recent memory summaries for an agent.
+
+        Args:
+            agent_id: Identifier of the agent.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of ``MemorySummaryRecord`` entries.
+        """
+        async with get_session() as session:
+            result = await session.execute(
+                select(MemorySummaryRecord)
+                .where(MemorySummaryRecord.agent_id == agent_id)
+                .order_by(MemorySummaryRecord.timestamp.desc())
+                .limit(limit)
+            )
+            return list(result.scalars().all())

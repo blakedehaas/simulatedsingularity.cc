@@ -134,10 +134,10 @@ class TestAgentRegistry:
         """Agent class without AGENT_ID should raise ValueError."""
 
         class BadAgent(AsyncBaseAgent):
-            async def receive_prompt(self, payload):
+            async def handle_prompt(self, payload):
                 pass
 
-            async def process_heartbeat(self, heartbeat):
+            async def handle_heartbeat(self, heartbeat):
                 pass
 
             async def emit_telemetry(self):

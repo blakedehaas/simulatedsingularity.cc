@@ -27,6 +27,15 @@ def setup_logging(verbose: bool) -> None:
     )
     if verbose:
         logger.debug("Verbose logging enabled.")
+        
+    # Suppress specific Chainlit markdown translation warnings
+    class ChainlitTranslationFilter(logging.Filter):
+        def filter(self, record):
+            if "Translated markdown file" in record.getMessage():
+                return False
+            return True
+            
+    logging.getLogger("chainlit").addFilter(ChainlitTranslationFilter())
 
 def generate_docs() -> str:
     """Generate robust HTML documentation."""
@@ -161,7 +170,7 @@ TOTAL                                           653      0   100%
             });
         }
         
-        function handleChat(e) {
+        async function handleChat(e) {
             if (e.key === 'Enter' && e.target.value.trim() !== '') {
                 const chatWindow = document.getElementById('chatWindow');
                 const userMsg = e.target.value;
@@ -169,13 +178,46 @@ TOTAL                                           653      0   100%
                 
                 chatWindow.innerHTML += `<div><strong>You:</strong> ${userMsg}</div>`;
                 
-                // Simulate LLM typing delay
-                setTimeout(() => {
-                    chatWindow.innerHTML += `<div><strong>Architect LLM:</strong> This documentation is generated dynamically by the <code>-h</code> flag in <code>src/singularity/cli.py</code>. The requested information regarding "${userMsg}" requires inspecting the <code>AsyncBaseAgent</code> implementation or LangGraph state dictionaries. Use <code>singularity -t</code> to verify module integrity!</div>`;
-                    chatWindow.scrollTop = chatWindow.scrollHeight;
-                }, 600);
+                // Show thinking indicator
+                const thinkingId = 'think-' + Date.now();
+                chatWindow.innerHTML += `<div id="${thinkingId}"><strong>Architect LLM:</strong> <em>Thinking...</em></div>`;
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+                
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ query: userMsg })
+                    });
+                    
+                    const data = await response.json();
+                    document.getElementById(thinkingId).remove();
+                    
+                    if (response.ok) {
+                        chatWindow.innerHTML += `<div><strong>Architect LLM:</strong> ${data.response}</div>`;
+                    } else {
+                        chatWindow.innerHTML += `<div><strong>Error:</strong> ${data.error || data.response}</div>`;
+                    }
+                } catch (err) {
+                    document.getElementById(thinkingId).remove();
+                    chatWindow.innerHTML += `<div><strong>Error:</strong> Failed to connect to local RAG server. Ensure you ran singularity -h.</div>`;
+                }
+                
+                chatWindow.scrollTop = chatWindow.scrollHeight;
             }
         }
+        
+        // Start Heartbeat
+        setInterval(() => {
+            fetch('/ping', { method: 'POST' }).catch(() => {});
+        }, 2000);
+        
+        // Send graceful shutdown on page unload
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/shutdown');
+        });
     </script>
 </body>
 </html>"""
@@ -207,9 +249,13 @@ def run_tests(verbose: bool) -> None:
     else:
         logger.info("100% test coverage achieved.")
 
-def run_interactive() -> None:
+def run_interactive(verbose: bool = False) -> None:
     """Launch the interactive HTML C2 plane."""
     logger.info("Launching interactive C2 plane...")
+    if verbose:
+        logger.debug("Verbose mode passed to Ground Control child process.")
+        os.environ["SINGULARITY_VERBOSE"] = "1"
+        
     app_path = pathlib.Path(__file__).parent / "ground_control" / "app.py"
     subprocess.run([sys.executable, "-m", "chainlit", "run", str(app_path)])
 
@@ -264,7 +310,14 @@ def main() -> None:
     if args.help:
         docs_path = generate_docs()
         logger.info(f"Documentation generated at {docs_path}")
-        webbrowser.open(f"file://{docs_path}")
+        try:
+            from singularity.docs_server import start_server
+            logger.info("Opening browser to RAG Docs Server...")
+            webbrowser.open("http://127.0.0.1:8080")
+            start_server()
+        except Exception as e:
+            logger.error(f"Failed to start RAG server: {e}. Falling back to static HTML.")
+            webbrowser.open(f"file://{docs_path}")
         sys.exit(0)
         
     if args.test:
@@ -272,7 +325,7 @@ def main() -> None:
         sys.exit(0)
         
     if args.interactive:
-        run_interactive()
+        run_interactive(args.verbose)
         sys.exit(0)
         
     if args.autonomous:

@@ -20,7 +20,7 @@ from singularity.core.agent_base import (
 
 @pytest.fixture(autouse=True)
 def mock_generate():
-    with patch("singularity.core.models.SimulatedChatModel.generate", new_callable=AsyncMock) as mock_gen:
+    with patch("singularity.core.models.GemmaChatModel.generate", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = "mocked response"
         yield mock_gen
 

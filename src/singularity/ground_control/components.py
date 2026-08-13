@@ -155,6 +155,60 @@ def build_constellation_overview(agents: list[AsyncBaseAgent]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Triadic Constellation overview
+# ---------------------------------------------------------------------------
+
+def build_triadic_overview(agents: list[AsyncBaseAgent]) -> str:
+    """Build a compact status panel for the triadic architecture.
+
+    Shows Orchestrator, Safeguard, and Synthesis with their statuses.
+    Includes node role descriptions: Brain & Clock, Gatekeeper, Doer.
+
+    Args:
+        agents: The list of active agents in the system.
+
+    Returns:
+        A Markdown-formatted string containing the triadic table.
+    """
+    status_emoji: dict[AgentStatus, str] = {
+        AgentStatus.INITIALIZING: "🔄",
+        AgentStatus.NOMINAL: "🟢",
+        AgentStatus.BUSY: "🟡",
+        AgentStatus.INTERRUPTED: "🟠",
+        AgentStatus.ERROR: "🔴",
+        AgentStatus.OFFLINE: "⚫",
+    }
+    
+    triadic_roles = {
+        "orchestrator-001": "Brain & Clock",
+        "safeguard-001": "Gatekeeper",
+        "synthesis-001": "Doer",
+    }
+
+    lines: list[str] = [
+        "## 📐 Triadic Architecture Status",
+        "",
+        "| Agent | Status | Node Role |",
+        "|-------|--------|-----------|",
+    ]
+
+    # Filter strictly to the 3 triadic nodes
+    triadic_agents = [a for a in agents if a.agent_id in triadic_roles]
+
+    for agent in triadic_agents:
+        emoji = status_emoji.get(agent.status, "⚪")
+        role_desc = triadic_roles.get(agent.agent_id, "Unknown")
+        lines.append(
+            f"| **{agent.agent_name}** (`{agent.agent_id}`) "
+            f"| {emoji} `{agent.status.value}` "
+            f"| {role_desc} |"
+        )
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+
 # Heartbeat indicator
 # ---------------------------------------------------------------------------
 

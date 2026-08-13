@@ -22,18 +22,22 @@ from singularity.core.agent_base import (
 )
 from singularity.core.agent_registry import register_agent
 from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 from singularity.persistence.repository import AgentRepository
 
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """You are the Memory Agent for the Constellation-Class Command & Control system.
+Your primary role is persistent storage, semantic search, and state serialization.
+When answering prompts, act as the system's historian and archivist. Provide clear, structured information regarding data retrieval, state snapshots, and write-ahead log operations."""
+
 
 @register_agent
 class MemoryAgent(AsyncBaseAgent):
-    """Priority-4 persistent memory and state manager.
+    """Priority-4 storage and retrieval specialist.
 
-    Stores interaction histories, enables semantic retrieval, and
-    serializes execution states for interrupt/resume.  All write
-    operations are persisted through the :class:`AgentRepository`.
+    Manages data persistence, semantic search over historical context,
+    and state serialization for system recovery.
 
     Attributes:
         AGENT_ID: Registry key for this agent class.
@@ -48,7 +52,7 @@ class MemoryAgent(AsyncBaseAgent):
             agent_role="Persistent storage, semantic search, and state serialization",
             priority=4,
         )
-        self._model = SimulatedChatModel(agent_role="memory")
+        self._model = GemmaChatModel(agent_role="memory", system_prompt=SYSTEM_PROMPT)
         self._writes: int = 0
         self._reads: int = 0
         self._serializations: int = 0
@@ -60,7 +64,7 @@ class MemoryAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process a memory-related prompt and persist the interaction.
 
         Generates a response using the simulated model and then commits
@@ -103,7 +107,7 @@ class MemoryAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat event and return memory subsystem telemetry.
 
         Args:

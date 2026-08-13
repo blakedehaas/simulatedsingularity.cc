@@ -21,9 +21,14 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Environment Agent for the Constellation-Class Command & Control system.
+Your primary role is to monitor infrastructure health, container status, and network diagnostics.
+Report on CPU load, memory utilization, network latency, and any degraded containers.
+Provide concise operational status updates and infrastructure assessments."""
 
 
 @register_agent
@@ -47,7 +52,7 @@ class EnvironmentAgent(AsyncBaseAgent):
             agent_role="Infrastructure health monitoring and diagnostics",
             priority=2,
         )
-        self._model = SimulatedChatModel(agent_role="environment")
+        self._model = GemmaChatModel(agent_role="environment", system_prompt=SYSTEM_PROMPT)
         self._last_heartbeat_seq: int = 0
         self._uptime_start: float = time.monotonic()
 
@@ -63,7 +68,7 @@ class EnvironmentAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Respond to environment-related queries.
 
         Generates a response via the simulated model and attaches
@@ -93,7 +98,7 @@ class EnvironmentAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Update simulated environment metrics and return telemetry.
 
         Simulates minor fluctuations in CPU load, memory, and network

@@ -9,10 +9,19 @@ persistence layer.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
+from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 import chainlit as cl
+from chainlit.server import app as chainlit_app
+from chainlit.input_widget import Select, Switch
 from chainlit import Action, Message
 
 from singularity.core.agent_base import (
@@ -52,7 +61,67 @@ from singularity.telemetry.events import (
     get_event_bus,
 )
 
+import os
+
 logger = logging.getLogger(__name__)
+
+# Suppress specific Chainlit markdown translation warnings in the child process
+class ChainlitTranslationFilter(logging.Filter):
+    def filter(self, record):
+        if "Translated markdown file" in record.getMessage():
+            return False
+        return True
+        
+logging.getLogger("chainlit").addFilter(ChainlitTranslationFilter())
+
+if os.environ.get("SINGULARITY_VERBOSE") == "1":
+    # Chainlit/Uvicorn might restrict the root logger or handlers to INFO
+    logging.getLogger().setLevel(logging.DEBUG)
+    for handler in logging.getLogger().handlers:
+        handler.setLevel(logging.DEBUG)
+    
+    logging.getLogger("singularity").setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
+    logger.debug("Verbose debug output enabled in Ground Control.")
+# FastAPI / Sensorium Mount
+# ---------------------------------------------------------------------------
+
+SENSORIUM_DIR = Path(__file__).parent.parent.parent.parent / "sensorium"
+
+chainlit_app.mount("/static", StaticFiles(directory=str(SENSORIUM_DIR)), name="static")
+
+@chainlit_app.get("/sensorium")
+async def read_index():
+    index_file = SENSORIUM_DIR / "index.html"
+    if index_file.exists():
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Sensorium Dashboard Not Initialized</h1>")
+
+# We will store active websockets here to push telemetry events
+active_websockets: list[WebSocket] = []
+
+@chainlit_app.websocket("/v1/stream/prompts")
+async def websocket_prompts(websocket: WebSocket):
+    await websocket.accept()
+    active_websockets.append(websocket)
+    logger.debug("New WebSocket connection accepted. Total active: %d", len(active_websockets))
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.debug("WebSocket received raw payload: %s", data)
+            try:
+                payload = json.loads(data)
+                target_agent = payload.get("targetAgent")
+                prompt_text = payload.get("promptText")
+                if prompt_text:
+                    # Forward to the chainlit handler!
+                    logger.info("Direct prompt received from Sensorium UI to %s", target_agent)
+                    await handle_user_prompt(prompt_text, target_agent)
+            except json.JSONDecodeError:
+                logger.debug("WebSocket payload was not valid JSON.")
+    except WebSocketDisconnect:
+        active_websockets.remove(websocket)
+        logger.debug("WebSocket connection disconnected. Total active: %d", len(active_websockets))
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +189,31 @@ async def _on_telemetry_event(event: TelemetryEvent) -> None:
             summary_parts.append(f"  • **{key}**: {val}")
         if summary_parts:
             content += "\n" + "\n".join(summary_parts)
+
+    # Broadcast JSON to Sensorium Dashboards
+    if active_websockets:
+        ws_payload = {
+            "source": "ground_control" if event.source_agent_id == "ground_control" else event.source_agent_id,
+            "targetAgent": event.source_agent_id,
+            "timestamp": event.timestamp.isoformat(),
+            "executionTokens": 0,
+            "status": "COMPLETED",
+            "promptText": content
+        }
+        # If it's an agent response or interrupt, include specific content
+        if event.event_type == TelemetryEventType.AGENT_RESPONSE and event.data:
+            ws_payload["promptText"] = event.data.get("content", "")
+        elif event.event_type == TelemetryEventType.NOTEPAD_UPDATE and event.data:
+            # Custom event for notepad
+            ws_payload["type"] = "NOTEPAD_UPDATE"
+            ws_payload["notepad"] = event.data.get("notepad", "")
+
+        for ws in active_websockets:
+            try:
+                import asyncio
+                asyncio.create_task(ws.send_text(json.dumps(ws_payload)))
+            except Exception:
+                pass
 
     try:
         await Message(content=content, author="Telemetry").send()
@@ -189,6 +283,8 @@ async def on_chat_start() -> None:
     # 4. Subscribe UI bridge for non-heartbeat events (heartbeats are frequent)
     bus.subscribe(TelemetryEventType.INTERRUPT_RAISED, _on_telemetry_event)
     bus.subscribe(TelemetryEventType.INTERRUPT_RESOLVED, _on_telemetry_event)
+    bus.subscribe(TelemetryEventType.AGENT_RESPONSE, _on_telemetry_event)
+    bus.subscribe(TelemetryEventType.NOTEPAD_UPDATE, _on_telemetry_event)
     bus.subscribe(TelemetryEventType.ERROR, _on_telemetry_event)
 
     # 5. Welcome message
@@ -199,28 +295,51 @@ async def on_chat_start() -> None:
         overview = build_constellation_overview(agents)
         await Message(content=overview, author="Ground Control").send()
 
-    # Add manual control actions
-    actions = [
-        Action(
-            name="trigger_heartbeat",
-            label="🫀 Manual Heartbeat",
-            description="Trigger a manual heartbeat across all agents",
-            payload={"action": "trigger_heartbeat"},
-        ),
-        Action(
-            name="shutdown_system",
-            label="🛑 Exit System",
-            description="Gracefully shut down the C2 environment",
-            payload={"action": "shutdown_system"},
-        ),
-    ]
-    await Message(
-        content="Use the actions below for manual constellation control:",
-        author="Ground Control",
-        actions=actions,
-    ).send()
+        # Setup Chat Settings for Agent Routing and Tools
+        agent_options = [agent.agent_id for agent in agents]
+        settings = await cl.ChatSettings(
+            [
+                Select(
+                    id="target_agent",
+                    label="Direct Agent Communication",
+                    values=agent_options,
+                    initial_index=0,
+                    description="Select which agent should receive your next message.",
+                ),
+                Select(
+                    id="tools_menu",
+                    label="Tools",
+                    values=["-- Select Tool --", "🫀 Manual Heartbeat"],
+                    initial_index=0,
+                    description="Trigger manual actions in the constellation."
+                ),
+                Switch(
+                    id="shutdown_system",
+                    label="🛑 Exit System",
+                    initial=False,
+                    description="Gracefully shut down the C2 environment",
+                )
+            ]
+        ).send()
+        cl.user_session.set("target_agent_id", agent_options[0])
 
     logger.info("Ground Control session ready")
+
+
+@cl.on_settings_update
+async def setup_agent(settings):
+    # Handle tools and manual actions
+    if settings.get("shutdown_system"):
+        await on_shutdown_system(None)
+        
+    tool = settings.get("tools_menu")
+    if tool == "🫀 Manual Heartbeat":
+        await on_trigger_heartbeat(None)
+    
+    target_id = settings.get("target_agent")
+    if target_id and target_id != cl.user_session.get("target_agent_id"):
+        cl.user_session.set("target_agent_id", target_id)
+        logger.info("Target agent set to %s", target_id)
 
 
 @cl.on_message

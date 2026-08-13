@@ -72,6 +72,24 @@ def _merge_telemetry(
     return merged
 
 
+def _merge_dict(
+    existing: dict[str, Any],
+    update: dict[str, Any],
+) -> dict[str, Any]:
+    """Reducer that merges dictionaries.
+
+    Args:
+        existing: Current dictionary mapping.
+        update: New dictionary mapping returned by the latest node.
+
+    Returns:
+        A merged dictionary.
+    """
+    merged = dict(existing)
+    merged.update(update)
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # Constellation state definition
 # ---------------------------------------------------------------------------
@@ -118,6 +136,36 @@ class ConstellationState:
     }
 
 
+class TriadicState:
+    """LangGraph state schema for the Triadic orchestration graph.
+
+    Attributes:
+        messages: Conversation message history.
+        current_payload: Last-write-wins string of the current payload content.
+        security_verdict: 'CLEAR' or 'THREAT'.
+        route_decision: 'self_handle' or 'synthesis'.
+        synthesis_output: Output from the Synthesis node.
+        proposed_actions: Actions proposed by agents. Accumulated.
+        interrupt_payload: Merged dictionary containing interrupt data.
+        memory_summary: Compressed context from Orchestrator.
+        heartbeat_sequence: Monotonically increasing heartbeat counter.
+        is_interrupted: ``True`` when the graph is paused awaiting C2.
+    """
+
+    __annotations__ = {
+        "messages": Annotated[list[BaseMessage], add_messages],
+        "current_payload": str,
+        "security_verdict": str,
+        "route_decision": str,
+        "synthesis_output": str,
+        "proposed_actions": Annotated[list[ProposedAction], _append_list],
+        "interrupt_payload": Annotated[dict[str, Any], _merge_dict],
+        "memory_summary": str,
+        "heartbeat_sequence": int,
+        "is_interrupted": bool,
+    }
+
+
 # Re-export annotations at module level for external introspection.
 messages: Annotated[list[BaseMessage], add_messages]
 current_agent: str
@@ -127,3 +175,10 @@ pending_interrupts: Annotated[list[InterruptRequest], _append_list]
 telemetry_frames: Annotated[dict[str, TelemetryFrame], _merge_telemetry]
 heartbeat_sequence: int
 is_interrupted: bool
+
+current_payload: str
+security_verdict: str
+route_decision: str
+synthesis_output: str
+interrupt_payload: Annotated[dict[str, Any], _merge_dict]
+memory_summary: str

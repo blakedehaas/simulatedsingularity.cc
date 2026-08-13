@@ -1,0 +1,78 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate_and_test:
+    name: Validate and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Pytest
+        run: uv run pytest tests/ -vvv --cov=src/singularity --cov-report=xml
+
+  build_and_publish:
+    name: Build and Publish Images
+    needs: validate_and_test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        run: podman build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-backend:latest -f Containerfile .
+
+      - name: Push backend image
+        run: podman push ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-backend:latest
+
+      - name: Build frontend image
+        run: podman build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-frontend:latest -f frontend_react/Containerfile .
+
+      - name: Push frontend image
+        run: podman push ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-frontend:latest
+
+  deploy_to_production:
+    name: Deploy to Production
+    needs: build_and_publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/simulated_singularity_cc
+            bash deployment/backup_chronos.sh
+            bash deployment/deploy_node.sh

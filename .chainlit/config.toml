@@ -1,0 +1,32 @@
+[project]
+name = "Simulated Singularity — Ground Control"
+enable_telemetry = false
+
+[features]
+prompt_playground = true
+
+[UI]
+name = "Simulated Singularity — Ground Control"
+description = "Constellation-Class Multi-Agent C2 Dashboard"
+default_collapse_content = true
+hide_cot = false
+custom_css = "/public/custom.css"
+custom_js = "/public/custom.js"
+
+[UI.theme]
+layout = "wide"
+
+[UI.theme.light]
+background = "#F8FAFC"
+paper = "#FFFFFF"
+primary = "#6366F1"
+secondary = "#8B5CF6"
+
+[UI.theme.dark]
+background = "#0F172A"
+paper = "#1E293B"
+primary = "#818CF8"
+secondary = "#A78BFA"
+
+[meta]
+generated_by = "Simulated Singularity CC — Phase 4"

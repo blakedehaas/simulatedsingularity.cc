@@ -21,9 +21,14 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import get_all_agents, register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Prompt Agent for the Constellation-Class Command & Control system.
+Your primary role is acting as a communications relay, aggregating telemetry, and routing heartbeat events.
+When interacting with the user, maintain the persona of a reliable comms backbone,
+formatting output cleanly and summarizing relayed messages when requested."""
 
 
 @register_agent
@@ -46,7 +51,7 @@ class PromptAgent(AsyncBaseAgent):
             agent_role="Message relay, telemetry aggregation, and heartbeat distribution",
             priority=3,
         )
-        self._model = SimulatedChatModel(agent_role="prompt")
+        self._model = GemmaChatModel(agent_role="prompt", system_prompt=SYSTEM_PROMPT)
         self._messages_relayed: int = 0
         self._broadcasts_sent: int = 0
         self._last_heartbeat_seq: int = 0
@@ -58,7 +63,7 @@ class PromptAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process a communications-related prompt.
 
         Handles relay, broadcast, and heartbeat-related queries.
@@ -88,7 +93,7 @@ class PromptAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and update relay metrics.
 
         Caches the constellation status from the heartbeat and updates

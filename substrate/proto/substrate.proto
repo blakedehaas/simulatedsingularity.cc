@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package substrate;
+
+option go_package = "simulated_singularity/substrate/proto;substratepb";
+
+service SubstrateDaemon {
+    rpc SpawnBuildAgent (BuildRequest) returns (BuildResponse);
+    rpc GetSystemTelemetry (TelemetryRequest) returns (TelemetryResponse);
+}
+
+message BuildRequest {
+    string build_id = 1;
+    string blueprint = 2;
+    string container_image = 3;
+    int32 timeout_seconds = 4;
+}
+
+message BuildResponse {
+    string build_id = 1;
+    int32 exit_code = 2;
+    string output_logs = 3;
+    string diff_patch = 4;
+    bool success = 5;
+    string error_message = 6;
+}
+
+message TelemetryRequest {
+    string client_id = 1;
+}
+
+message TelemetryResponse {
+    double cpu_usage_percent = 1;
+    double memory_usage_mb = 2;
+    int32 active_containers = 3;
+    string podman_version = 4;
+}

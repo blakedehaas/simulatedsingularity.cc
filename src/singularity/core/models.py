@@ -8,10 +8,13 @@ appropriate responses based on keyword detection in the input prompt.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import Any
 
 from singularity.core.agent_base import AgentResponse, AgentStatus, TelemetryFrame
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -244,30 +247,109 @@ class SimulatedChatModel:
 import datetime
 
 class GemmaChatModel:
-    """Google GenAI LLM interface for Gemma models."""
+    """Google GenAI LLM interface for Gemma/Gemini models."""
 
     def __init__(
         self,
         agent_role: str = "core",
-        model_name: str = "gemma-2b",
+        model_name: str | None = None,
+        system_prompt: str = "You are a helpful AI assistant.",
+        tools: list[Any] | None = None,
     ) -> None:
+        from singularity.core.tools import CORE_TOOLS
+        
         self.agent_role = agent_role
-        self.model_name = model_name
+        if model_name is None:
+            # Map high-speed Sensorium/Safeguard to Gemini 3.6 Flash, and deep reasoning to Pro
+            if agent_role.lower() in {"security", "safeguard", "sensorium", "core", "environment", "prompt"}:
+                self.model_name = "gemini-3.6-flash"
+            else:
+                self.model_name = "gemini-1.5-pro"
+        else:
+            self.model_name = model_name
+
+        self.system_prompt = system_prompt
+        self.tools = tools if tools is not None else CORE_TOOLS
+        self._tools_map = {t.name: t for t in self.tools}
+        self._fallback_model = SimulatedChatModel(agent_role=self.agent_role)
         self._llm = None
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            self._llm = ChatGoogleGenerativeAI(model=self.model_name)
+            import os
+            if os.getenv("GOOGLE_API_KEY"):
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                base_llm = ChatGoogleGenerativeAI(model=self.model_name)
+                if self.tools:
+                    self._llm = base_llm.bind_tools(self.tools)
+                else:
+                    self._llm = base_llm
         except ImportError:
             pass
 
+    def _build_messages(self, prompt_text: str) -> list[Any]:
+        from langchain_core.messages import HumanMessage, SystemMessage
+        return [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=prompt_text),
+        ]
+
     async def generate(self, prompt_text: str) -> str:
         if self._llm:
-            response = await self._llm.ainvoke(prompt_text)
-            return response.content
-        return f"[{datetime.datetime.now().isoformat()}] mock"
+            from langchain_core.messages import ToolMessage
+            try:
+                messages = self._build_messages(prompt_text)
+                
+                # Tool calling loop (max 5 iterations to prevent infinite loops)
+                for _ in range(5):
+                    response = await self._llm.ainvoke(messages)
+                    messages.append(response)
+                    
+                    tool_calls = getattr(response, "tool_calls", None)
+                    if not tool_calls or not isinstance(tool_calls, list):
+                        content = response.content
+                        if isinstance(content, list):
+                            content = "".join(item.get("text", "") for item in content if isinstance(item, dict) and "text" in item)
+                        elif not isinstance(content, str):
+                            content = str(content)
+                        return content
+                        
+                    for tool_call in tool_calls:
+                        selected_tool = self._tools_map[tool_call["name"]]
+                        tool_output = await selected_tool.ainvoke(tool_call["args"])
+                        messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                
+                return "Error: Exceeded maximum tool call iterations."
+            except Exception as e:
+                logger.warning("GenAI API call failed (%s) — using SimulatedChatModel fallback", e)
+                return await self._fallback_model.generate(prompt_text)
+        return await self._fallback_model.generate(prompt_text)
 
     def generate_sync(self, prompt_text: str) -> str:
         if self._llm:
-            response = self._llm.invoke(prompt_text)
-            return response.content
-        return f"[{datetime.datetime.now().isoformat()}] mock"
+            from langchain_core.messages import ToolMessage
+            try:
+                messages = self._build_messages(prompt_text)
+                
+                # Tool calling loop
+                for _ in range(5):
+                    response = self._llm.invoke(messages)
+                    messages.append(response)
+                    
+                    tool_calls = getattr(response, "tool_calls", None)
+                    if not tool_calls or not isinstance(tool_calls, list):
+                        content = response.content
+                        if isinstance(content, list):
+                            content = "".join(item.get("text", "") for item in content if isinstance(item, dict) and "text" in item)
+                        elif not isinstance(content, str):
+                            content = str(content)
+                        return content
+                        
+                    for tool_call in tool_calls:
+                        selected_tool = self._tools_map[tool_call["name"]]
+                        tool_output = selected_tool.invoke(tool_call["args"])
+                        messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                        
+                return "Error: Exceeded maximum tool call iterations."
+            except Exception as e:
+                logger.warning("GenAI API call failed (%s) — using SimulatedChatModel fallback", e)
+                return self._fallback_model.generate_sync(prompt_text)
+        return self._fallback_model.generate_sync(prompt_text)

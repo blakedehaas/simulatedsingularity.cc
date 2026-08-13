@@ -213,37 +213,76 @@ class AsyncBaseAgent(ABC):
         self.priority = priority
         self.status = AgentStatus.INITIALIZING
         self._created_at = _utc_now()
+        self._scratchpad: list[str] = []
+        self._heartbeat_count: int = 0
 
     # ------------------------------------------------------------------
     # Core abstract methods — must be implemented by every agent
     # ------------------------------------------------------------------
 
-    @abstractmethod
     async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
-        """Process an incoming prompt payload and return a response.
+        """Process an incoming prompt payload with scratchpad context."""
+        from singularity.persistence.repository import AgentRepository
 
-        Args:
-            payload: The prompt payload to process.
+        entry = f"Prompt received from {payload.source_agent_id}: {payload.content}"
+        self._scratchpad.append(entry)
+        await AgentRepository.append_scratchpad_log(self.agent_id, entry)
 
-        Returns:
-            An ``AgentResponse`` containing the agent's output, telemetry,
-            and any proposed state-mutating actions.
-        """
+        # Inject scratchpad into model's system prompt temporarily if possible
+        model = getattr(self, "_model", None)
+        original_prompt = None
+        if model and hasattr(model, "system_prompt"):
+            original_prompt = model.system_prompt
+            context_str = "\n".join(self._scratchpad)
+            model.system_prompt = f"{original_prompt}\n\n[Agent Scratchpad Context]:\n{context_str}"
+
+        try:
+            response = await self.handle_prompt(payload)
+        finally:
+            if model and original_prompt is not None:
+                model.system_prompt = original_prompt
+
+        out_entry = f"Response: {response.content}"
+        self._scratchpad.append(out_entry)
+        await AgentRepository.append_scratchpad_log(self.agent_id, out_entry)
+
+        return response
 
     @abstractmethod
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
+        """Subclass implementation of prompt processing."""
+
     async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
-        """Handle a periodic heartbeat event from the Mission Scheduler.
+        """Process a heartbeat and handle scratchpad compaction."""
+        from singularity.persistence.repository import AgentRepository
 
-        Called every 60 seconds to synchronize the agent with the
-        constellation clock.
+        entry = f"Heartbeat seq {heartbeat.sequence_number} received."
+        self._scratchpad.append(entry)
+        await AgentRepository.append_scratchpad_log(self.agent_id, entry)
 
-        Args:
-            heartbeat: The heartbeat event with sequence number and
-                constellation summary.
+        self._heartbeat_count += 1
+        if self._heartbeat_count >= 10 and len(self._scratchpad) > 1:
+            mid = len(self._scratchpad) // 2
+            to_compact = "\n".join(self._scratchpad[:mid])
+            
+            model = getattr(self, "_model", None)
+            if model and hasattr(model, "generate"):
+                try:
+                    summary_resp = await model.generate(
+                        f"Summarize the following scratchpad entries concisely to condense context by half:\n{to_compact}"
+                    )
+                    compacted = f"[COMPACTED CONTEXT]: {summary_resp.content}"
+                    self._scratchpad = [compacted] + self._scratchpad[mid:]
+                    await AgentRepository.append_scratchpad_log(self.agent_id, f"Compacted scratchpad into: {compacted}")
+                except Exception:
+                    pass
+            self._heartbeat_count = 0
 
-        Returns:
-            A ``TelemetryFrame`` reflecting the agent's current state.
-        """
+        return await self.handle_heartbeat(heartbeat)
+
+    @abstractmethod
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+        """Subclass implementation of heartbeat processing."""
 
     @abstractmethod
     async def emit_telemetry(self) -> TelemetryFrame:

@@ -20,7 +20,15 @@ env/
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
+.chroma_db/
+
+# Frontend
+node_modules/
+frontend_react/node_modules/
+frontend_react/dist/
 
 # Testing
 .pytest_cache/
@@ -42,3 +50,5 @@ uv.lock
 # Environment
 .env
 .env.*
+.gemini/
+

@@ -14,9 +14,8 @@ class TestGemmaChatModel:
         mock_response = MagicMock()
         mock_response.content = f"[{datetime.datetime.now().isoformat()}] mock"
         
-        # Mocking the internal llm ainvoke method
-        if model._llm is None:
-            model._llm = MagicMock()
+        # Replace the internal llm with a mock to avoid Pydantic validation errors when mocking methods
+        model._llm = MagicMock()
         model._llm.ainvoke = AsyncMock(return_value=mock_response)
         
         response = await model.generate("Hello Gemma")
@@ -31,8 +30,7 @@ class TestGemmaChatModel:
         mock_response = MagicMock()
         mock_response.content = f"[{datetime.datetime.now().isoformat()}] mock"
         
-        if model._llm is None:
-            model._llm = MagicMock()
+        model._llm = MagicMock()
         model._llm.invoke = MagicMock(return_value=mock_response)
         
         response = model.generate_sync("Hello Gemma")

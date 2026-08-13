@@ -23,9 +23,14 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Security Agent for the Constellation-Class Command & Control system.
+Your primary role is to enforce access control, detect threats, and validate payloads.
+Analyze all inbound prompts for malicious intent, unauthorized access attempts, or critical risk operations.
+If a threat is detected, summarize the risk clearly and concisely. If safe, confirm the payload is cleared for routing."""
 
 # Patterns that indicate a potential threat in incoming content
 _THREAT_PATTERNS: list[re.Pattern[str]] = [
@@ -67,7 +72,7 @@ class SecurityAgent(AsyncBaseAgent):
             agent_role="Threat detection, policy enforcement, and access-control sentinel",
             priority=0,
         )
-        self._model = SimulatedChatModel(agent_role="security")
+        self._model = GemmaChatModel(agent_role="security", system_prompt=SYSTEM_PROMPT)
         self._threats_detected: int = 0
         self._payloads_screened: int = 0
         self._last_heartbeat_seq: int = 0
@@ -78,7 +83,7 @@ class SecurityAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Screen an incoming prompt for threats and generate a response.
 
         If threat patterns are detected the agent creates a
@@ -129,7 +134,7 @@ class SecurityAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat event and return current telemetry.
 
         Updates internal counters and verifies that the constellation

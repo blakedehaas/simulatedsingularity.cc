@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  c2-frontend:
+    image: ghcr.io/${GITHUB_USER:-YOUR_GITHUB_USER}/c2-frontend:latest
+    container_name: c2-frontend
+    ports:
+      - "80:80"
+    networks:
+      - singularity_net
+    restart: unless-stopped
+
+  c2-backend:
+    image: ghcr.io/${GITHUB_USER:-YOUR_GITHUB_USER}/c2-backend:latest
+    container_name: c2-backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./data/sqlite:/app/data/sqlite
+      - ./data/vector:/app/data/vector
+    networks:
+      - singularity_net
+    restart: unless-stopped
+
+  substrate:
+    image: ghcr.io/${GITHUB_USER:-YOUR_GITHUB_USER}/substrate:latest
+    container_name: substrate
+    ports:
+      - "50051:50051"
+    networks:
+      - singularity_net
+    restart: unless-stopped
+
+networks:
+  singularity_net:
+    driver: bridge

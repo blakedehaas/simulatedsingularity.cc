@@ -225,3 +225,46 @@ class SyncPromptRecord(Base):
     execution_state: Mapped[ExecutionStateRecord] = relationship(
         back_populates="sync_prompts"
     )
+
+class AgentScratchpadLog(Base):
+    """Raw uncompacted context entries for agent scratchpads.
+
+    Attributes:
+        id: Auto-incrementing primary key.
+        agent_id: Foreign key to the agent profile.
+        entry_text: The raw text added to the scratchpad.
+        timestamp: When the entry was added.
+    """
+
+    __tablename__ = "agent_scratchpad_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    entry_text: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+
+
+class MemorySummaryRecord(Base):
+    """Compacted interaction memory summary for an agent.
+
+    Attributes:
+        id: Auto-incrementing primary key.
+        agent_id: Foreign key or identifier for the agent.
+        summary_text: The compacted summary text.
+        heartbeat_sequence: The heartbeat sequence when this was compacted.
+        entries_compacted: Number of raw entries compacted.
+        timestamp: When the summary was created.
+    """
+
+    __tablename__ = "memory_summaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    heartbeat_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    entries_compacted: Mapped[int] = mapped_column(Integer, default=0)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )

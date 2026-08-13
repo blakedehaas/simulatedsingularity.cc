@@ -26,7 +26,7 @@ The `singularity` CLI is the main entry point to the system. It exposes several 
 
 | Flag | Description |
 | ---- | ----------- |
-| `-h, --help` | **Interactive Documentation:** Generates and launches a highly detailed, interactive HTML dashboard containing code snippets, architectural breakdowns, and a simulated context-aware LLM chatbot assistant. |
+| `-h, --help` | **Interactive Documentation:** Generates and launches an interactive HTML dashboard containing code snippets, architectural breakdowns, and a live AI assistant powered by `gemma-2-2b-it`. The AI Assistant uses Retrieval Augmented Generation (RAG) backed by a local Chroma vector database to semantically search the entire codebase and documentation. |
 | `-v, --verbose` | **Verbose Mode:** Overrides logging layers to `DEBUG` and traces the entire LangGraph execution pipeline, printing telemetry metrics directly to the terminal. |
 | `-t, --test` | **Test Suite Trigger:** Automatically triggers the integrated `pytest` testing environment and calculates coverage. If coverage drops below 100%, it simulates delegating the refactoring task to autonomous coding subagents. |
 | `-i, --interactive` | **Ground Control:** Initiates the `chainlit` server subprocess, opening the human-in-the-loop Ground Control dashboard for direct manual interaction with the agent constellation. |
@@ -55,4 +55,4 @@ To dive deeper into the technical interfaces, such as implementing `AsyncBaseAge
 ```powershell
 singularity --help
 ```
-You can use the simulated **Architect LLM** chat window within the generated HTML page to query structural decisions!
+You can use the **Architect LLM** chat window within the generated HTML page to query structural decisions! The LLM possesses full contextual awareness of every `.py` file and markdown document in the repository.

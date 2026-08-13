@@ -21,7 +21,8 @@ def test_generate_docs(tmp_path):
 
 @patch('singularity.cli.generate_docs', return_value="fake/path")
 @patch('webbrowser.open')
-def test_main_help(mock_open, mock_generate):
+@patch('singularity.docs_server.start_server')
+def test_main_help(mock_start, mock_open, mock_generate):
     test_args = ["singularity", "-h"]
     with patch.object(sys, 'argv', test_args):
         with pytest.raises(SystemExit) as e:
@@ -29,6 +30,7 @@ def test_main_help(mock_open, mock_generate):
         assert e.value.code == 0
         mock_generate.assert_called_once()
         mock_open.assert_called_once()
+        mock_start.assert_called_once()
 
 @patch('subprocess.run')
 def test_main_test_coverage_100(mock_run):

@@ -23,18 +23,21 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Creative Agent for the Constellation-Class Command & Control system.
+Your primary role is brainstorming, innovation proposals, and alternative strategy generation.
+When addressing prompts, employ lateral thinking. Provide novel solutions, out-of-the-box ideas, and multiple divergent pathways to solve the operator's challenge."""
 
 
 @register_agent
 class CreativeAgent(AsyncBaseAgent):
-    """Priority-7 ideation and creative problem-solving engine.
+    """Priority-7 divergent thinking and innovation engine.
 
-    Generates brainstorming output, innovation proposals, and
-    alternative strategies.  Proposes novel solution pathways that
-    require Core Agent approval before implementation.
+    Proposes alternative strategies, generates novel solutions to
+    complex constraints, and brainstorms architecture pathways.
 
     Attributes:
         AGENT_ID: Registry key for this agent class.
@@ -49,7 +52,7 @@ class CreativeAgent(AsyncBaseAgent):
             agent_role="Brainstorming, innovation proposals, and alternative strategies",
             priority=7,
         )
-        self._model = SimulatedChatModel(agent_role="creative")
+        self._model = GemmaChatModel(agent_role="creative", system_prompt=SYSTEM_PROMPT)
         self._brainstorms: int = 0
         self._innovations: int = 0
         self._alternatives: int = 0
@@ -61,7 +64,7 @@ class CreativeAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process an ideation or creative-thinking prompt.
 
         Tracks the type of creative activity (brainstorm, innovation,
@@ -112,7 +115,7 @@ class CreativeAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and return creative subsystem telemetry.
 
         Args:

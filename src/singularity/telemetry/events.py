@@ -35,6 +35,7 @@ class TelemetryEventType(str, enum.Enum):
     TASK_SCHEDULED = "task_scheduled"
     TASK_COMPLETED = "task_completed"
     ERROR = "error"
+    NOTEPAD_UPDATE = "notepad_update"
 
 
 # ---------------------------------------------------------------------------

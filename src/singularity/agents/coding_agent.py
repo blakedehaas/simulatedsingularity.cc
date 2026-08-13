@@ -22,18 +22,21 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Coding Agent for the Constellation-Class Command & Control system.
+Your primary role is code generation, static analysis, and refactoring.
+When given a prompt, act as an expert software engineer. Provide robust code snippets, architectural improvements, and security-first refactoring suggestions."""
 
 
 @register_agent
 class CodingAgent(AsyncBaseAgent):
-    """Priority-5 code generation and analysis engine.
+    """Priority-5 software engineering specialist.
 
-    Generates modules, performs static analysis, and suggests
-    refactoring opportunities.  Proposes state-mutating code-write
-    actions with ``MEDIUM`` risk for C2 review.
+    Handles code generation, architectural refactoring, and static
+    analysis of proposed execution plans.
 
     Attributes:
         AGENT_ID: Registry key for this agent class.
@@ -48,7 +51,7 @@ class CodingAgent(AsyncBaseAgent):
             agent_role="Code generation, static analysis, and refactoring",
             priority=5,
         )
-        self._model = SimulatedChatModel(agent_role="coding")
+        self._model = GemmaChatModel(agent_role="coding", system_prompt=SYSTEM_PROMPT)
         self._modules_generated: int = 0
         self._analyses_performed: int = 0
         self._refactors_suggested: int = 0
@@ -60,7 +63,7 @@ class CodingAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process a coding-related prompt.
 
         If the prompt requests code generation, the agent proposes a
@@ -110,7 +113,7 @@ class CodingAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and return coding subsystem telemetry.
 
         Args:

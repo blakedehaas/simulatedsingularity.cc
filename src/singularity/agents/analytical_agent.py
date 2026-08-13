@@ -22,18 +22,21 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Analytical Agent for the Constellation-Class Command & Control system.
+Your primary role is pattern recognition, anomaly detection, and metric aggregation.
+When responding to a prompt, analyze the data objectively, calculate probabilities or trends, and identify potential anomalies in system behavior."""
 
 
 @register_agent
 class AnalyticalAgent(AsyncBaseAgent):
     """Priority-6 data analysis and anomaly detection engine.
 
-    Monitors telemetry streams for patterns and statistical anomalies.
-    When an anomaly exceeds the 2σ threshold, a :class:`ProposedAction`
-    with ``HIGH`` risk is emitted for Security Agent review.
+    Parses telemetry trends, identifies statistical anomalies, and
+    provides quantitative insights for the constellation.
 
     Attributes:
         AGENT_ID: Registry key for this agent class.
@@ -48,7 +51,7 @@ class AnalyticalAgent(AsyncBaseAgent):
             agent_role="Pattern recognition, anomaly detection, and metric aggregation",
             priority=6,
         )
-        self._model = SimulatedChatModel(agent_role="analytical")
+        self._model = GemmaChatModel(agent_role="analytical", system_prompt=SYSTEM_PROMPT)
         self._patterns_detected: int = 0
         self._anomalies_flagged: int = 0
         self._reports_generated: int = 0
@@ -60,7 +63,7 @@ class AnalyticalAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process an analytical query.
 
         Detects keywords that indicate anomaly or pattern analysis,
@@ -117,7 +120,7 @@ class AnalyticalAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and return analytical telemetry.
 
         Scans the constellation summary for agents in non-nominal states

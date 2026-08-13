@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulated Singularity — C2 Ground Control Substrate</title>
+    <!-- Monospace Typeface & Dark Mode Mission Control Aesthetic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="c2-grid-container">
+        
+        <!-- ===================================================================
+             I. THE CYCLIC SCHEDULER (Top Tier - 100% Viewport Width)
+             =================================================================== -->
+        <header class="cyclic-scheduler-module">
+            <div class="scheduler-header-bar">
+                <div class="header-branding">
+                    <span class="symbol">☩</span>
+                    <span class="title">SIMULATED SINGULARITY</span>
+                    <span class="subtitle">// C2 MISSION CONTROL SUBSTRATE</span>
+                </div>
+                <div class="scheduler-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">SYSTEM STATE:</span>
+                        <span id="system-state-badge" class="badge badge-nominal">NOMINAL</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">HEARTBEAT SEQ:</span>
+                        <span id="heartbeat-seq-display" class="metric-value">#0042</span>
+                    </div>
+                    <div class="metric-item countdown-box">
+                        <span class="metric-label">NEXT HEARTBEAT IN:</span>
+                        <span id="countdown-display" class="metric-value highlight">60s</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- The Kinetic Pulse (Progress Bar) -->
+            <div class="pulse-track">
+                <div id="pulse-bar" class="pulse-bar"></div>
+            </div>
+        </header>
+
+        <!-- ===================================================================
+             II. THE COMMAND HORIZON (Middle Tier - 60/40 Horizontal Split)
+             =================================================================== -->
+        <section class="command-horizon-tier">
+            
+            <!-- Left Module: Global Telemetry (60%) -->
+            <div class="c2-module global-telemetry-module">
+                <div class="module-title-bar">
+                    <span class="module-indicator">●</span>
+                    <span class="module-title">GLOBAL TELEMETRY STREAM</span>
+                    <span class="module-meta">[BUS: C2-MAIN-TELEMETRY]</span>
+                    <div class="module-controls">
+                        <button id="btn-manual-heartbeat" class="btn-tiny btn-nominal">PULSE HEARTBEAT</button>
+                        <button id="btn-trigger-hitl" class="btn-tiny btn-interrupt">SIMULATE INTERRUPT</button>
+                    </div>
+                </div>
+                <div id="global-telemetry-terminal" class="terminal-body">
+                    <!-- Dynamic timestamped logs appended via JS -->
+                </div>
+            </div>
+
+            <!-- Right Module: HITL Gatekeeper (40%) -->
+            <div id="hitl-gatekeeper-module" class="c2-module hitl-gatekeeper-module dimmed">
+                <div class="module-title-bar warning-bar">
+                    <span class="module-indicator pulse-dot">▲</span>
+                    <span class="module-title">HITL GATEKEEPER</span>
+                    <span id="hitl-status-tag" class="module-meta">[STATUS: INACTIVE / STANDBY]</span>
+                </div>
+                <div class="gatekeeper-body">
+                    <div class="gatekeeper-alert-banner">
+                        <div class="alert-icon">⚠️</div>
+                        <div class="alert-text">
+                            <div class="alert-heading">STOCHASTIC INTERCEPT TRIGGERED</div>
+                            <div id="hitl-action-desc" class="alert-desc">
+                                Execution state locked in mathematical limbo. Awaiting operator resolution for state-mutating operation.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gatekeeper-details-card">
+                        <div class="detail-row">
+                            <span class="label">TARGET SUBSYSTEM:</span>
+                            <span id="hitl-target-agent" class="val">synthesis-001 (Pragma)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">PROPOSED ACTION:</span>
+                            <span id="hitl-action-type" class="val">EXECUTE_SUBSTRATE_BUILD</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">RISK ASSESSMENT:</span>
+                            <span id="hitl-risk-level" class="val val-critical">CRITICAL (LEVEL 4)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">INTERRUPT TIMESTAMP:</span>
+                            <span id="hitl-timestamp" class="val">[PENDING]</span>
+                        </div>
+                    </div>
+
+                    <div class="gatekeeper-actions">
+                        <button id="btn-hitl-approve" class="btn-gatekeeper btn-approve">
+                            <span class="btn-icon">✓</span> APPROVE SEQUENCE
+                        </button>
+                        <button id="btn-hitl-deny" class="btn-gatekeeper btn-deny">
+                            <span class="btn-icon">✕</span> DENY SEQUENCE
+                        </button>
+                        <button id="btn-hitl-override" class="btn-gatekeeper btn-override">
+                            <span class="btn-icon">⚡</span> OVERRIDE & ESCALATE
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ===================================================================
+             III. THE COGNITIVE TRIAD (Bottom Tier - 33/33/33 Vertical Columns)
+             =================================================================== -->
+        <section class="cognitive-triad-tier">
+            
+            <!-- Terminal 1: Anima / Memory Node (33%) -->
+            <div id="terminal-node-anima" class="c2-module agent-terminal-module">
+                <div class="module-title-bar">
+                    <span class="node-badge">NODE I</span>
+                    <span class="module-title">ANIMA // MEMORY</span>
+                    <span class="agent-model-tag">gemini-1.5-pro</span>
+                </div>
+                <div class="agent-status-bar">
+                    <span class="status-indicator nominal">●</span>
+                    <span class="status-text">RHYTHMIC / PERSISTENCE ACTIVE</span>
+                    <span class="metric-mini">COMPACTIONS: <span id="metric-compactions">14</span></span>
+                </div>
+                <div id="stream-anima" class="terminal-body agent-stream-body">
+                    <!-- Memory & Context logs -->
+                </div>
+            </div>
+
+            <!-- Terminal 2: Sensorium / Interface Node (33%) -->
+            <div id="terminal-node-sensorium" class="c2-module agent-terminal-module">
+                <div class="module-title-bar">
+                    <span class="node-badge">NODE II</span>
+                    <span class="module-title">SENSORIUM // INTERFACE</span>
+                    <span class="agent-model-tag">gemini-3.6-flash</span>
+                </div>
+                <div class="agent-status-bar">
+                    <span class="status-indicator nominal">●</span>
+                    <span class="status-text">STEADY / MULTIMODAL INGESTION</span>
+                    <span class="metric-mini">INGESTION: <span id="metric-ingestion">1.2 MB/s</span></span>
+                </div>
+                <div id="stream-sensorium" class="terminal-body agent-stream-body">
+                    <!-- Sensorium & Routing logs -->
+                </div>
+            </div>
+
+            <!-- Terminal 3: Pragma / Architecture Node (33%) -->
+            <div id="terminal-node-pragma" class="c2-module agent-terminal-module">
+                <div class="module-title-bar">
+                    <span class="node-badge">NODE III</span>
+                    <span class="module-title">PRAGMA // ARCHITECTURE</span>
+                    <span class="agent-model-tag">gemini-1.5-pro</span>
+                </div>
+                <div class="agent-status-bar">
+                    <span class="status-indicator nominal">●</span>
+                    <span class="status-text">EXPLOSIVE / RAPID BLUEPRINTING</span>
+                    <span class="metric-mini">TOKENS: <span id="metric-tokens">142,890</span></span>
+                </div>
+                <div id="stream-pragma" class="terminal-body agent-stream-body">
+                    <!-- Architecture & Substrate logs -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Command Input Footer Bar -->
+        <footer class="c2-footer-bar">
+            <div class="prompt-symbol">&gt;&gt;</div>
+            <input type="text" id="command-input" class="command-input" placeholder="Enter cognitive directive or substrate query... (Press Enter to transmit)" autocomplete="off">
+            <button id="btn-send-command" class="btn-send">TRANSMIT</button>
+        </footer>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

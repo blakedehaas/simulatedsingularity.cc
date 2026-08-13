@@ -90,6 +90,26 @@ class HeartbeatScheduler:
         self._managed_job_ids.clear()
         logger.info("HeartbeatScheduler stopped")
 
+    async def start_triadic(self) -> None:
+        """Start the heartbeat scheduler using triadic broadcast."""
+        if self.is_running:
+            raise RuntimeError("HeartbeatScheduler is already running.")
+
+        self._scheduler = AsyncIOScheduler()
+        self._scheduler.start()
+
+        self._scheduler.add_job(
+            self.broadcast_triadic_heartbeat,
+            trigger=IntervalTrigger(seconds=self.interval_seconds),
+            id=self._heartbeat_job_id,
+        )
+
+        self.is_running = True
+        logger.info(
+            "HeartbeatScheduler started (Triadic) — broadcasting every %ds",
+            self.interval_seconds,
+        )
+
     # ------------------------------------------------------------------
     # Heartbeat broadcast
     # ------------------------------------------------------------------
@@ -143,7 +163,58 @@ class HeartbeatScheduler:
         )
         return frames
 
+    async def broadcast_triadic_heartbeat(self) -> list[TelemetryFrame]:
+        """Send a heartbeat event only to the triadic agents.
+        
+        Targets: orchestrator-001, safeguard-001, synthesis-001.
+
+        Returns:
+            A list of :class:`TelemetryFrame` responses collected from
+            agents that successfully processed the heartbeat.
+        """
+        self._sequence += 1
+
+        all_agents = get_all_agents()
+        triadic_ids = {"orchestrator-001", "safeguard-001", "synthesis-001"}
+        agents = [a for a in all_agents if a.agent_id in triadic_ids]
+
+        constellation_summary: dict[str, AgentStatus] = {
+            agent.agent_id: agent.status for agent in agents
+        }
+
+        heartbeat = HeartbeatEvent(
+            sequence_number=self._sequence,
+            constellation_summary=constellation_summary,
+        )
+
+        logger.info(
+            "Broadcasting triadic heartbeat #%d to %d agents",
+            self._sequence,
+            len(agents),
+        )
+
+        frames: list[TelemetryFrame] = []
+        for agent in agents:
+            try:
+                frame = await agent.process_heartbeat(heartbeat)
+                frames.append(frame)
+            except Exception:
+                logger.exception(
+                    "Agent %s failed to process heartbeat #%d",
+                    agent.agent_id,
+                    self._sequence,
+                )
+
+        logger.info(
+            "Triadic heartbeat #%d complete — %d/%d agents responded",
+            self._sequence,
+            len(frames),
+            len(agents),
+        )
+        return frames
+
     # ------------------------------------------------------------------
+
     # Scheduled task management
     # ------------------------------------------------------------------
 

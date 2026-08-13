@@ -191,6 +191,46 @@ class TestAsyncBaseAgent:
         frame = await mock_agent.process_heartbeat(sample_heartbeat)
         assert isinstance(frame, TelemetryFrame)
         assert frame.agent_id == "mock-001"
+        assert mock_agent._heartbeat_count == 2
+
+    @pytest.mark.asyncio
+    async def test_process_heartbeat_compaction(self, mock_agent, sample_heartbeat) -> None:
+        """process_heartbeat should compact scratchpad every 10 heartbeats."""
+        from unittest.mock import AsyncMock, patch
+        
+        # Inject some scratchpad entries
+        for i in range(15):
+            mock_agent._scratchpad.append(f"Entry {i}")
+            
+        mock_agent._heartbeat_count = 9
+        
+        # We need a mock model with a `generate` method returning an object with a `content` attribute
+        class DummyResp:
+            content = "condensed summary"
+            
+        class DummyModel:
+            async def generate(self, text: str):
+                return DummyResp()
+                
+        mock_agent._model = DummyModel()
+        
+        # Ensure it works even if generate fails
+        class ErrorModel:
+            async def generate(self, text: str):
+                raise Exception("API error")
+                
+        # Trigger compaction (9 -> 10)
+        with patch("singularity.persistence.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+            await mock_agent.process_heartbeat(sample_heartbeat)
+            
+        assert mock_agent._heartbeat_count == 1 # 0 from compaction + 1 from handle_heartbeat
+        assert "[COMPACTED CONTEXT]: condensed summary" in mock_agent._scratchpad[0]
+        
+        # Test error path
+        mock_agent._heartbeat_count = 9
+        mock_agent._model = ErrorModel()
+        with patch("singularity.persistence.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+            await mock_agent.process_heartbeat(sample_heartbeat)
         assert mock_agent._heartbeat_count == 1
 
     @pytest.mark.asyncio

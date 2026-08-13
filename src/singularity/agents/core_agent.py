@@ -23,9 +23,14 @@ from singularity.core.agent_base import (
     TelemetryFrame,
 )
 from singularity.core.agent_registry import get_agent, get_all_agents, register_agent
-from singularity.core.models import SimulatedChatModel
+from singularity.core.models import GemmaChatModel
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are the Core Agent for the Constellation-Class Command & Control system.
+Your primary role is central routing, resource management, and task delegation.
+When receiving a prompt, determine the most logical functional agent to handle the task and delegate it.
+Provide high-level architectural insight and coordinate complex multi-agent workflows."""
 
 # Keyword → agent-id routing table
 _ROUTING_TABLE: dict[str, str] = {
@@ -74,7 +79,7 @@ class CoreAgent(AsyncBaseAgent):
             agent_role="Central routing, resource allocation, and task delegation",
             priority=1,
         )
-        self._model = SimulatedChatModel(agent_role="core")
+        self._model = GemmaChatModel(agent_role="core", system_prompt=SYSTEM_PROMPT)
         self._prompts_routed: int = 0
         self._delegations: int = 0
         self._last_heartbeat_seq: int = 0
@@ -85,7 +90,7 @@ class CoreAgent(AsyncBaseAgent):
     # Core interface
     # ------------------------------------------------------------------
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Route an incoming prompt to the appropriate functional agent.
 
         Uses a keyword-based routing table to determine the best target.
@@ -144,7 +149,7 @@ class CoreAgent(AsyncBaseAgent):
             },
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and update internal constellation view.
 
         Args:

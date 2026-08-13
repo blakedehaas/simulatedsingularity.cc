@@ -9,7 +9,12 @@ from __future__ import annotations
 import asyncio
 import tempfile
 from pathlib import Path
+import os
+from unittest.mock import MagicMock
 from typing import AsyncIterator
+
+# Inject a dummy Google API key so agents instantiate without ValidationError
+os.environ["GOOGLE_API_KEY"] = "mocked-test-key"
 
 import pytest
 import pytest_asyncio
@@ -43,7 +48,7 @@ async def temp_db_path(tmp_path: Path) -> Path:
     return tmp_path / "test_singularity.db"
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(autouse=True)
 async def initialized_db(temp_db_path: Path) -> AsyncIterator[Path]:
     """Initialize a temporary database and tear it down after the test.
 
@@ -81,7 +86,7 @@ class MockAgent(AsyncBaseAgent):
         self._prompt_count = 0
         self._heartbeat_count = 0
 
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
         """Process a prompt and return a mock response."""
         self._prompt_count += 1
         return AgentResponse(
@@ -90,7 +95,7 @@ class MockAgent(AsyncBaseAgent):
             telemetry=await self.emit_telemetry(),
         )
 
-    async def process_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
         """Process a heartbeat and return telemetry."""
         self._heartbeat_count += 1
         return await self.emit_telemetry()
@@ -152,4 +157,47 @@ def sample_proposed_action() -> ProposedAction:
         description="Execute system diagnostic scan",
         parameters={"target": "all_nodes", "depth": "full"},
         risk_level=RiskLevel.MEDIUM,
+    )
+
+# ---------------------------------------------------------------------------
+# API fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def test_api_client():
+    """Create a FastAPI TestClient for the Singularity API."""
+    from fastapi.testclient import TestClient
+    from singularity.api.app import app
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------------
+# Temporal fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_temporal_vector_memory():
+    """Provide a mocked vector memory for temporal RAG testing."""
+    mock_memory = MagicMock()
+    mock_memory.retrieve_context.return_value = "Sample temporal data for the requested era."
+    return mock_memory
+
+
+# ---------------------------------------------------------------------------
+# Economy fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sample_digital_twin_state():
+    """Provide a preset DigitalTwinState instance for testing."""
+    from singularity.economy.idle_engine import DigitalTwinState
+    return DigitalTwinState(
+        id="test-twin-001",
+        raw_data_harvested=100.0,
+        simulation_epochs=0,
+        lvl_keystroke=0,
+        lvl_semantic=0,
+        lvl_biometric=0,
+        lvl_consciousness_rag=0,
+        data_per_second=0.0,
     )
