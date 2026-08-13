@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,10 +14,17 @@ from singularity.api.routes_economy import router as economy_router
 
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for the FastAPI application."""
+    logger.info("C2 API matrix online")
+    yield
+
 app = FastAPI(
     title="Simulated Singularity C2 API",
     description="Constellation-Class Multi-Agent Command & Control Environment API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS Middleware
@@ -36,10 +44,6 @@ app.include_router(audio_router)
 app.include_router(sandbox_router)
 app.include_router(economy_router)
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Startup event handler for the FastAPI application."""
-    logger.info("C2 API matrix online")
 
 @app.get("/api/health", tags=["Health"])
 async def health_check() -> dict[str, str]:
