@@ -44,6 +44,23 @@ def build_history_parts(history: list[dict[str, Any]]) -> list[Any]:
         parts.append(genai.types.Part.from_text("\n\n"))
     return parts
 
+def serialize_response_parts(response) -> str:
+    """Serialize Gemini response parts to JSON string array for DB and Frontend."""
+    generated_parts = []
+    try:
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    generated_parts.append({"text": part.text})
+                elif part.inline_data:
+                    generated_parts.append({"inlineData": {"mimeType": part.inline_data.mime_type, "data": base64.b64encode(part.inline_data.data).decode('utf-8')}})
+        else:
+            generated_parts.append({"text": response.text.strip()})
+    except Exception as e:
+        logger.error(f"Error serializing parts: {e}")
+        generated_parts.append({"text": response.text.strip() if hasattr(response, 'text') else ""})
+    return json.dumps(generated_parts)
+
 async def evaluate_end_condition(client: genai.Client, condition: str, history_parts: list[Any]) -> bool:
     """Evaluate if the end condition has been met (Stateless)."""
     prompt = f"Based on the history, has this condition been met? Condition: {condition}\nAnswer YES or NO (and nothing else)."
@@ -69,7 +86,7 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
     """Poll an agent to see if they want to interject (Stateless intent polling unless verbose)."""
     prompt_text = (
         f"Do you want to speak next? If you have nothing to say, output exactly: {{\"intent\": \"PASS\"}}\n"
-        f"If you want to interject, output a JSON object: {{\"intent\": \"INTERJECT\", \"priority\": <1-10>, \"message\": \"<your response>\"}}\n"
+        f"If you want to interject, output a JSON object: {{\"intent\": \"INTERJECT\", \"priority\": <1-10>, \"reason\": \"<why you want to speak>\"}}\n"
         f"Higher priority (10) means it is urgent for you to speak. Output ONLY valid JSON."
     )
     
@@ -148,9 +165,9 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                         priority = int(intent.get("priority", 5))
                     except ValueError:
                         priority = 5
-                    message = intent.get("message", "")
-                    if message:
-                        await queue.put((-priority, fifo_counter, agent_name, message))
+                    reason = intent.get("reason", "")
+                    if reason:
+                        await queue.put((-priority, fifo_counter, agent_name, reason))
                         fifo_counter += 1
                         
             if queue.empty():
@@ -158,10 +175,11 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 agent = agents_config[0]
                 agent_name = agent.get("name", "UnknownAgent")
                 system_prompt = agent.get("system_prompt", "")
+                agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
                     kwargs = {
-                        "model": "gemini-2.5-flash-8b",
+                        "model": agent_model,
                         "contents": "The conversation has stalled. Provide your next response.",
                         "config": {"system_instruction": system_prompt, "store": True}
                     }
@@ -171,25 +189,26 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                         kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + kwargs["contents"])]
                         
                     response = await asyncio.to_thread(client.interactions.create, **kwargs)
-                    reply = response.text.strip()
+                    winner_message = serialize_response_parts(response)
                     canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
-                    await queue.put((-10, fifo_counter, agent_name, reply))
+                    await queue.put((-10, fifo_counter, agent_name, winner_message))
                     fifo_counter += 1
                 except Exception as e:
                     logger.error(f"Error forcing response: {e}")
                     return
 
-            neg_prio, _, winner_name, winner_message = await queue.get()
+            neg_prio, _, winner_name, queued_payload = await queue.get()
             logger.info(f"Agent {winner_name} interjects with priority {-neg_prio}")
             
             if neg_prio != -10:
                 agent = next((a for a in agents_config if a.get("name") == winner_name), agents_config[0])
                 system_prompt = agent.get("system_prompt", "")
+                agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
                     kwargs = {
-                        "model": "gemini-2.5-flash-8b",
-                        "contents": f"Your generated interjection was: {winner_message}\nAccept this as your turn and continue.",
+                        "model": agent_model,
+                        "contents": "It is your turn to speak.",
                         "config": {"system_instruction": system_prompt, "store": True}
                     }
                     if canonical_interaction_id:
@@ -198,9 +217,13 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                         kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + kwargs["contents"])]
                         
                     response = await asyncio.to_thread(client.interactions.create, **kwargs)
+                    winner_message = serialize_response_parts(response)
                     canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
                 except Exception as e:
                     logger.error(f"Error updating canonical interaction state: {e}")
+                    return
+            else:
+                winner_message = queued_payload
             
             async with get_session() as db:
                 new_msg = SimulationMessage(

@@ -30,6 +30,11 @@ class LanguageSpawnRequest(BaseModel):
     agents_config: list[dict[str, Any]]
     verbose_mode: bool = False
 
+class ImportRequest(BaseModel):
+    version: str
+    simulation: dict[str, Any]
+    history: list[dict[str, Any]]
+
 # Mock database for the API layer (kept for backward compatibility with older code if any)
 _mock_simulations_db: dict[str, dict[str, Any]] = {}
 _mock_messages_db: dict[str, list[dict[str, Any]]] = {}
@@ -134,6 +139,91 @@ async def get_simulation_messages(sim_id: str) -> list[dict[str, Any]]:
         }
         for m in messages
     ]
+
+@router.get("/{sim_id}/export")
+async def export_simulation(sim_id: str) -> dict[str, Any]:
+    """Export the entire simulation state to a JSON object."""
+    async with get_session() as db:
+        result = await db.execute(select(SimulationSession).where(SimulationSession.id == sim_id))
+        session = result.scalars().first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Simulation not found")
+            
+        result_config = await db.execute(select(LanguageSimulationConfig).where(LanguageSimulationConfig.session_id == sim_id))
+        config = result_config.scalars().first()
+        
+        result_msgs = await db.execute(
+            select(SimulationMessage)
+            .where(SimulationMessage.session_id == sim_id)
+            .order_by(SimulationMessage.timestamp)
+        )
+        messages = result_msgs.scalars().all()
+        
+    history = [
+        {
+            "sender": msg.sender,
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+        }
+        for msg in messages
+    ]
+    
+    export_data = {
+        "version": "1.0",
+        "simulation": {
+            "name": f"Export of {session.name}",
+            "verbose_mode": getattr(config, 'verbose_mode', False) if config else False,
+            "seed_prompt": config.seed_prompt if config else "",
+            "end_state_condition": config.end_state_condition if config else "",
+            "agents_config": config.agents_config if config else []
+        },
+        "history": history
+    }
+    
+    return export_data
+
+@router.post("/import")
+async def import_simulation(request: ImportRequest) -> dict[str, Any]:
+    """Import a simulation from a JSON state object."""
+    sim_id = str(uuid.uuid4())
+    logger.info(f"Importing simulation {sim_id}")
+    
+    sim_data = request.simulation
+    agents_config = sim_data.get("agents_config", [])
+    
+    snapshot = {
+        "active_agents": [agent.get("name") for agent in agents_config]
+    }
+    
+    async with get_session() as db:
+        session = SimulationSession(
+            id=sim_id,
+            name=sim_data.get("name", f"Imported Sim {sim_id[:8]}"),
+            seed=42,
+            topology_snapshot=snapshot
+        )
+        
+        config = LanguageSimulationConfig(
+            id=str(uuid.uuid4()),
+            session_id=sim_id,
+            seed_prompt=sim_data.get("seed_prompt", ""),
+            end_state_condition=sim_data.get("end_state_condition", ""),
+            agents_config=agents_config,
+            verbose_mode=sim_data.get("verbose_mode", False)
+        )
+        
+        db.add(session)
+        db.add(config)
+        
+        for msg_data in request.history:
+            new_msg = SimulationMessage(
+                session_id=sim_id,
+                sender=msg_data.get("sender", "unknown"),
+                content=msg_data.get("content", "")
+            )
+            db.add(new_msg)
+            
+    return {"status": "Imported", "sim_id": sim_id}
 
 @router.post("/language/spawn")
 async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, Any]:

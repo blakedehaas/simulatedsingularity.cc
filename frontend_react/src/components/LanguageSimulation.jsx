@@ -7,7 +7,7 @@ const LanguageSimulation = () => {
   const [verboseMode, setVerboseMode] = useState(false);
   
   const [endStateCondition, setEndStateCondition] = useState('');
-  const [agents, setAgents] = useState([{ name: '', system_prompt: '' }]);
+  const [agents, setAgents] = useState([{ name: '', system_prompt: '', model: 'gemini-2.5-flash-8b' }]);
   const [simId, setSimId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -43,7 +43,7 @@ const LanguageSimulation = () => {
   }, [simId, isRunning]);
 
   const handleAddAgent = () => {
-    setAgents([...agents, { name: '', system_prompt: '' }]);
+    setAgents([...agents, { name: '', system_prompt: '', model: 'gemini-2.5-flash-8b' }]);
   };
 
   const handleRemoveAgent = (index) => {
@@ -112,6 +112,58 @@ const LanguageSimulation = () => {
     }
   };
 
+  const handleExport = async () => {
+    if (!simId) return;
+    try {
+      const res = await axios.get(`/api/simulations/${simId}/export`);
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", `simulation_${simId}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    } catch (err) {
+      console.error('Error exporting simulation:', err);
+      setError('Failed to export simulation.');
+    }
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        const res = await axios.post('/api/simulations/import', json);
+        setSimId(res.data.sim_id);
+        setError('');
+        
+        const sim = json.simulation || {};
+        try {
+            const parsedSeed = JSON.parse(sim.seed_prompt || '[]');
+            if (Array.isArray(parsedSeed) && parsedSeed.length > 0 && parsedSeed[0].text) {
+                setSeedText(parsedSeed[0].text);
+            }
+        } catch(e) {
+            setSeedText(sim.seed_prompt || '');
+        }
+        
+        setEndStateCondition(sim.end_state_condition || '');
+        setVerboseMode(sim.verbose_mode || false);
+        if (sim.agents_config) {
+          setAgents(sim.agents_config);
+        }
+      } catch (err) {
+        console.error('Error importing simulation:', err);
+        setError('Failed to import simulation. Invalid JSON or server error.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const handleRun = async () => {
     if (!simId) return;
     try {
@@ -154,9 +206,24 @@ const LanguageSimulation = () => {
   return (
     <div className="flex flex-col h-full font-mono text-gray-300">
       <div className="flex justify-between items-end border-b border-gray-800 pb-2 mb-6">
-        <h1 className="text-2xl text-cyan-400 text-glow-cyan uppercase tracking-wider">
-          Language Simulation Matrix
-        </h1>
+        <div className="flex items-end gap-4">
+            <h1 className="text-2xl text-cyan-400 text-glow-cyan uppercase tracking-wider">
+              Language Simulation Matrix
+            </h1>
+            <div className="flex items-center gap-2 mb-1">
+                <button 
+                  onClick={handleExport}
+                  disabled={!simId}
+                  className={`text-xs px-2 py-1 rounded transition-colors uppercase ${!simId ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700'}`}
+                >
+                  Export JSON
+                </button>
+                <label className="text-xs px-2 py-1 rounded transition-colors uppercase cursor-pointer bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700">
+                  Import JSON
+                  <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+                </label>
+            </div>
+        </div>
         
         <label className="flex items-center gap-2 cursor-pointer group">
           <span className="text-xs uppercase text-gray-400 group-hover:text-cyan-400 transition-colors">Verbose Mode</span>
@@ -247,6 +314,15 @@ const LanguageSimulation = () => {
                     placeholder="Agent Name"
                     className="bg-black/50 border border-gray-700 rounded p-2 text-sm focus:border-cyan-500 focus:outline-none"
                   />
+                  <select
+                    value={agent.model || 'gemini-2.5-flash-8b'}
+                    onChange={(e) => handleAgentChange(index, 'model', e.target.value)}
+                    className="bg-black/50 border border-gray-700 rounded p-2 text-sm focus:border-cyan-500 focus:outline-none text-gray-300"
+                  >
+                    <option value="gemini-2.5-flash-8b">gemini-2.5-flash-8b (Text/Vision)</option>
+                    <option value="gemini-3.1-flash-image">gemini-3.1-flash-image (Image Generation)</option>
+                    <option value="gemini-3.1-flash-tts-preview">gemini-3.1-flash-tts-preview (Audio Generation)</option>
+                  </select>
                   <textarea
                     value={agent.system_prompt}
                     onChange={(e) => handleAgentChange(index, 'system_prompt', e.target.value)}
