@@ -8,6 +8,8 @@ from typing import Any
 
 from google import genai
 
+from sqlalchemy.future import select
+
 from singularity.persistence.database import get_session
 from singularity.persistence.models import (
     LanguageSimulationConfig,
@@ -118,7 +120,7 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
         logger.error(f"Error getting intent for {agent_name}: {e}")
         return {"intent": "PASS"}
 
-async def _execute_turn_with_tools(client, agent_model, system_prompt, content_str, canonical_interaction_id, history_parts):
+async def _execute_turn_with_tools(client, agent_model, system_prompt, content_str, canonical_interaction_id, history_parts, config, session_id):
     kwargs = {
         "model": agent_model,
         "contents": content_str,
@@ -143,17 +145,58 @@ async def _execute_turn_with_tools(client, agent_model, system_prompt, content_s
             fn_args = fn_call.args
             logger.info(f"Agent executing tool: {fn_name}({fn_args})")
             
-            tool_func = next((t for t in SWARM_TOOLS if t.__name__ == fn_name), None)
-            if tool_func:
+            async with get_session() as db:
+                call_msg = SimulationMessage(
+                    session_id=session_id,
+                    sender="SYSTEM_AUDIT",
+                    content=json.dumps([{"text": f"[TOOL EXECUTION STARTED] {fn_name}({fn_args})"}])
+                )
+                db.add(call_msg)
+            
+            if fn_name == "update_agent_system_prompt":
                 try:
-                    if isinstance(fn_args, dict):
-                        result = tool_func(**fn_args)
+                    target_name = fn_args.get("agent_name")
+                    new_prompt = fn_args.get("new_prompt")
+                    found = False
+                    
+                    if hasattr(config, 'agents_config'):
+                        for a in config.agents_config:
+                            if a.get("name") == target_name:
+                                a["system_prompt"] = new_prompt
+                                found = True
+                                break
+                                
+                    if found:
+                        async with get_session() as db:
+                            result_config = await db.execute(select(LanguageSimulationConfig).where(LanguageSimulationConfig.session_id == session_id))
+                            db_config = result_config.scalars().first()
+                            if db_config:
+                                db_config.agents_config = list(config.agents_config)
+                        result = f"Successfully updated system prompt for {target_name}"
                     else:
-                        result = tool_func()
+                        result = f"Error: Agent '{target_name}' not found."
                 except Exception as e:
                     result = f"Error executing tool: {str(e)}"
             else:
-                result = f"Tool {fn_name} not found"
+                tool_func = next((t for t in SWARM_TOOLS if t.__name__ == fn_name), None)
+                if tool_func:
+                    try:
+                        if isinstance(fn_args, dict):
+                            result = tool_func(**fn_args)
+                        else:
+                            result = tool_func()
+                    except Exception as e:
+                        result = f"Error executing tool: {str(e)}"
+                else:
+                    result = f"Tool {fn_name} not found"
+                    
+            async with get_session() as db:
+                res_msg = SimulationMessage(
+                    session_id=session_id,
+                    sender="SYSTEM_AUDIT",
+                    content=json.dumps([{"text": f"[TOOL EXECUTION COMPLETED] {fn_name} returned:\n{result}"}])
+                )
+                db.add(res_msg)
                 
             parts.append(genai.types.Part.from_function_response(name=fn_name, response={"result": result}))
             
@@ -239,7 +282,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 
                 try:
                     winner_message, canonical_interaction_id = await _execute_turn_with_tools(
-                        client, agent_model, system_prompt, "The conversation has stalled. Provide your next response.", canonical_interaction_id, history_parts
+                        client, agent_model, system_prompt, "The conversation has stalled. Provide your next response.", canonical_interaction_id, history_parts, config, session_id
                     )
                     await queue.put((-10, fifo_counter, agent_name, winner_message))
                     fifo_counter += 1
@@ -257,7 +300,7 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 
                 try:
                     winner_message, canonical_interaction_id = await _execute_turn_with_tools(
-                        client, agent_model, system_prompt, "It is your turn to speak.", canonical_interaction_id, history_parts
+                        client, agent_model, system_prompt, "It is your turn to speak.", canonical_interaction_id, history_parts, config, session_id
                     )
                 except Exception as e:
                     logger.error(f"Error updating canonical interaction state: {e}")

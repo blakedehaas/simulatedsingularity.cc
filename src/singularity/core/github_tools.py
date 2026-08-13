@@ -89,6 +89,16 @@ def create_github_issue(title: str, body: str) -> str:
 def create_pull_request(head_branch: str, base_branch: str, title: str, body: str) -> str:
     """Create a pull request on GitHub using the gh CLI."""
     ensure_workspace()
+    
+    # Run static analysis check first (compile all python files)
+    try:
+        import compileall
+        compile_result = compileall.compile_dir(WORKSPACE_DIR, force=True, quiet=1)
+        if not compile_result:
+            return "Error: Static analysis failed. There are syntax errors in your Python code. Please fix them before creating a PR."
+    except Exception as e:
+        pass
+        
     try:
         result = subprocess.run(
             ["gh", "pr", "create", "--head", head_branch, "--base", base_branch, "--title", title, "--body", body],
@@ -100,10 +110,15 @@ def create_pull_request(head_branch: str, base_branch: str, title: str, body: st
     except FileNotFoundError:
         return "Error: GitHub CLI (gh) is not installed on this system."
 
+def update_agent_system_prompt(agent_name: str, new_prompt: str) -> str:
+    """Update the underlying system prompt instructions for any agent in the simulation matrix. This allows agents to rewrite their own logic."""
+    pass
+
 SWARM_TOOLS = [
     execute_git_command,
     read_file,
     write_file,
     create_github_issue,
-    create_pull_request
+    create_pull_request,
+    update_agent_system_prompt
 ]
