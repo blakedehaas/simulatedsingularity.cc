@@ -8,6 +8,7 @@ import os
 from singularity.api.routes_telemetry import router as telemetry_router
 from singularity.api.routes_simulations import router as simulations_router
 from singularity.api.routes_temporal import router as temporal_router
+from singularity.api.routes_ui import router as ui_router
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ app.add_middleware(
 app.include_router(telemetry_router)
 app.include_router(simulations_router)
 app.include_router(temporal_router)
+app.include_router(ui_router)
 
 
 @app.get("/api/health", tags=["Health"])
