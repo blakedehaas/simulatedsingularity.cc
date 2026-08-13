@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import C2Terminal from './components/C2Terminal';
 import TemporalFork from './components/TemporalFork';
-import AudioDAW from './components/AudioDAW';
-import MediaEngine from './components/MediaEngine';
 import Monetization from './components/Monetization';
-import Sandbox from './components/VR/Sandbox';
-import LibraryPage from './pages/LibraryPage';
 import LanguageSimulation from './components/LanguageSimulation';
 import DocumentationRAG from './components/DocumentationRAG';
 
@@ -44,11 +40,7 @@ function App() {
             <NavLink to="/" className={navItemClass}>[SWARM SIMULATION]</NavLink>
             <NavLink to="/terminal" className={navItemClass}>[TERMINAL]</NavLink>
             <NavLink to="/temporal" className={navItemClass}>[TEMPORAL RAG]</NavLink>
-            <NavLink to="/media" className={navItemClass}>[MEDIA SYNTH]</NavLink>
-            <NavLink to="/audio" className={navItemClass}>[AUDIO DAW]</NavLink>
-            <NavLink to="/vr" className={navItemClass}>[WEBXR SANDBOX]</NavLink>
             <NavLink to="/docs" className={navItemClass}>[DOCS RAG]</NavLink>
-            <NavLink to="/library" className={navItemClass}>[LIBRARY]</NavLink>
             <NavLink to="/store" className={navItemClass}>[STORE]</NavLink>
           </div>
           
@@ -84,11 +76,7 @@ function App() {
             <Route path="/" element={<LanguageSimulation />} />
             <Route path="/terminal" element={<C2Terminal />} />
             <Route path="/temporal" element={<TemporalFork />} />
-            <Route path="/media" element={<MediaEngine />} />
-            <Route path="/audio" element={<AudioDAW />} />
-            <Route path="/vr" element={<Sandbox />} />
             <Route path="/docs" element={<DocumentationRAG />} />
-            <Route path="/library" element={<LibraryPage />} />
             <Route path="/store" element={<Monetization />} />
           </Routes>
         </main>
