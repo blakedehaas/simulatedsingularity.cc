@@ -45,8 +45,7 @@ Thumbs.db
 .files/
 
 # UV
-uv.lock
-
+# (uv.lock is committed for deterministic builds)
 # Environment
 .env
 .env.*
