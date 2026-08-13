@@ -50,14 +50,15 @@ def test_temporal_agent_cutoff_calculation():
     agent_40 = instantiate_temporal_agent(40, birth_year)
     assert agent_40.memory_filter["cutoff_year"] == 2030
 
-def test_simulate_dialectic():
+@pytest.mark.asyncio
+async def test_simulate_dialectic():
     """TRACE-TRAG-004: Test simulation of a dialectic conversation between two agents."""
     logger.debug("Testing simulate_dialectic")
     
     agent_a = instantiate_temporal_agent(20, 2000)
     agent_b = instantiate_temporal_agent(40, 1980)
     
-    conversation = simulate_dialectic(agent_a, agent_b, "Technology impact")
+    conversation = await simulate_dialectic(agent_a, agent_b, "Technology impact")
     
     assert isinstance(conversation, list)
     assert len(conversation) > 0

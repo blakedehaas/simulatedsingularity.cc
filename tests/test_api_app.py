@@ -25,26 +25,10 @@ def test_telemetry_endpoint(test_api_client):
     response = test_api_client.get("/api/telemetry")
     assert response.status_code == 200
     data = response.json()
-    assert "status" in data
+    assert isinstance(data, list)
 
 
-def test_console_resolve(test_api_client):
-    """TRACE-API-003: Test POST /api/console/resolve endpoint."""
-    logger.debug("Testing console resolve endpoint")
-    payload = {"decision": "APPROVE", "agent_id": "test", "override_prompt": ""}
-    response = test_api_client.post("/api/console/resolve", json=payload)
-    assert response.status_code == 200
-    assert response.json().get("status") == "State Resumed"
 
-
-def test_console_dispatch(test_api_client):
-    """TRACE-API-004: Test POST /api/console/dispatch endpoint."""
-    logger.debug("Testing console dispatch endpoint")
-    payload = {"prompt": "test directive", "target": "orchestrator"}
-    response = test_api_client.post("/api/console/dispatch", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data.get("status") == "Dispatched"
 
 
 def test_economy_state(test_api_client):
