@@ -57,7 +57,7 @@ jobs:
         run: podman push ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-backend:latest
 
       - name: Build frontend image
-        run: podman build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-frontend:latest -f frontend_react/Containerfile .
+        run: podman build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-frontend:latest -f frontend_react/Containerfile frontend_react
 
       - name: Push frontend image
         run: podman push ${{ env.REGISTRY }}/${{ github.repository_owner }}/c2-frontend:latest
