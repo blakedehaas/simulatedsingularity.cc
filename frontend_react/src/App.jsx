@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import C2Terminal from './components/C2Terminal';
-import TemporalFork from './components/TemporalFork';
 import Monetization from './components/Monetization';
-import LanguageSimulation from './components/LanguageSimulation';
+import Dashboard from './components/Dashboard';
+import TemporalFork from './components/TemporalFork';
 import DocumentationRAG from './components/DocumentationRAG';
 
 function App() {
@@ -37,8 +36,7 @@ function App() {
         {/* Navigation Bar */}
         <nav className="glass-panel sticky top-0 z-50 flex items-center justify-between px-6 py-2 border-b border-gray-800">
           <div className="flex space-x-2">
-            <NavLink to="/" className={navItemClass}>[SWARM SIMULATION]</NavLink>
-            <NavLink to="/terminal" className={navItemClass}>[TERMINAL]</NavLink>
+            <NavLink to="/" className={navItemClass}>[SWARM COMMAND]</NavLink>
             <NavLink to="/temporal" className={navItemClass}>[TEMPORAL RAG]</NavLink>
             <NavLink to="/docs" className={navItemClass}>[DOCS RAG]</NavLink>
             <NavLink to="/store" className={navItemClass}>[STORE]</NavLink>
@@ -73,8 +71,7 @@ function App() {
         {/* Main Content Area */}
         <main className="flex-1 p-6 overflow-hidden flex flex-col">
           <Routes>
-            <Route path="/" element={<LanguageSimulation />} />
-            <Route path="/terminal" element={<C2Terminal />} />
+            <Route path="/" element={<Dashboard />} />
             <Route path="/temporal" element={<TemporalFork />} />
             <Route path="/docs" element={<DocumentationRAG />} />
             <Route path="/store" element={<Monetization />} />
