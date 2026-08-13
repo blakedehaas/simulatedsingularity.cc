@@ -42,6 +42,28 @@ const LanguageSimulation = () => {
     };
   }, [simId, isRunning]);
 
+  const loadSwarmTemplate = () => {
+    setSeedText("The Github Swarm is now online. ProjectManager, please analyze the repository, identify 3 high-impact features or bugs, and file them as issues. Developer, wait for the issues to be filed, then pick one to implement.");
+    setEndStateCondition("End when a PR is merged or the team concludes their work.");
+    setAgents([
+      {
+        name: "ProjectManager",
+        model: "gemini-2.5-flash-8b",
+        system_prompt: "You are the ProjectManager. You analyze the codebase, identify issues, and file them using the create_github_issue tool. Once you file issues, tell the Developer to start."
+      },
+      {
+        name: "Developer",
+        model: "gemini-2.5-flash-8b",
+        system_prompt: "You are the Developer. You wait for the ProjectManager to create issues. Then you use execute_git_command, read_file, and write_file to implement the changes in a feature branch. Finally, you commit, push, and use create_pull_request to open a PR against dev."
+      },
+      {
+        name: "CodeReviewer",
+        model: "gemini-2.5-flash-8b",
+        system_prompt: "You are the CodeReviewer. You review PRs created by the Developer. You can accept or reject them and provide feedback."
+      }
+    ]);
+  };
+
   const handleAddAgent = () => {
     setAgents([...agents, { name: '', system_prompt: '', model: 'gemini-2.5-flash-8b' }]);
   };
@@ -239,7 +261,12 @@ const LanguageSimulation = () => {
         
         {/* Configuration Panel */}
         <div className="glass-panel p-6 flex flex-col gap-4 overflow-y-auto border border-gray-800 bg-gray-900/40 rounded-lg">
-          <h2 className="text-xl text-emerald-400 mb-2 uppercase tracking-wide">Configuration</h2>
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-xl text-emerald-400 uppercase tracking-wide">Configuration</h2>
+            <button onClick={loadSwarmTemplate} className="text-xs px-2 py-1 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-700 rounded transition-colors uppercase">
+              Load Swarm Template
+            </button>
+          </div>
           
           <div className="flex flex-col gap-2">
             <label className="text-xs uppercase text-gray-500">Seed Prompt</label>

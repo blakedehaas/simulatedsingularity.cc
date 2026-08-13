@@ -15,6 +15,7 @@ from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 from singularity.core.agent_base import (
     AgentStatus,
@@ -70,6 +71,12 @@ class HeartbeatScheduler:
             trigger=IntervalTrigger(seconds=self.interval_seconds),
             id=self._heartbeat_job_id,
         )
+        
+        self._scheduler.add_job(
+            self.execute_nightly_merge,
+            trigger=CronTrigger(hour=2, minute=0),
+            id="nightly-merge-job",
+        )
 
         self.is_running = True
         logger.info(
@@ -109,6 +116,20 @@ class HeartbeatScheduler:
             "HeartbeatScheduler started (Triadic) — broadcasting every %ds",
             self.interval_seconds,
         )
+
+    async def execute_nightly_merge(self) -> None:
+        """Merge dev into main nightly and push."""
+        logger.info("Executing nightly merge of dev into main...")
+        try:
+            from singularity.core.github_tools import execute_git_command
+            import asyncio
+            
+            await asyncio.to_thread(execute_git_command, "checkout main")
+            await asyncio.to_thread(execute_git_command, "merge dev")
+            await asyncio.to_thread(execute_git_command, "push origin main")
+            logger.info("Nightly merge successful.")
+        except Exception as e:
+            logger.error(f"Nightly merge failed: {e}")
 
     # ------------------------------------------------------------------
     # Heartbeat broadcast

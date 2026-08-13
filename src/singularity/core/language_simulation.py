@@ -13,6 +13,7 @@ from singularity.persistence.models import (
     LanguageSimulationConfig,
     SimulationMessage,
 )
+from singularity.core.github_tools import SWARM_TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,10 @@ def serialize_response_parts(response) -> str:
                     generated_parts.append({"text": part.text})
                 elif part.inline_data:
                     generated_parts.append({"inlineData": {"mimeType": part.inline_data.mime_type, "data": base64.b64encode(part.inline_data.data).decode('utf-8')}})
+                elif part.function_call:
+                    generated_parts.append({"text": f"[Function Call: {part.function_call.name}]"})
+                elif part.function_response:
+                    generated_parts.append({"text": f"[Function Response: {part.function_response.name}]"})
         else:
             generated_parts.append({"text": response.text.strip()})
     except Exception as e:
@@ -112,6 +117,61 @@ async def generate_interjection_intent(client: genai.Client, agent_name: str, sy
     except Exception as e:
         logger.error(f"Error getting intent for {agent_name}: {e}")
         return {"intent": "PASS"}
+
+async def _execute_turn_with_tools(client, agent_model, system_prompt, content_str, canonical_interaction_id, history_parts):
+    kwargs = {
+        "model": agent_model,
+        "contents": content_str,
+        "config": {
+            "system_instruction": system_prompt, 
+            "store": True,
+            "tools": SWARM_TOOLS
+        }
+    }
+    if canonical_interaction_id:
+        kwargs["config"]["previous_interaction_id"] = canonical_interaction_id
+    else:
+        kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + content_str)]
+        
+    response = await asyncio.to_thread(client.interactions.create, **kwargs)
+    
+    # Loop to handle consecutive function calls
+    while response.function_calls:
+        parts = []
+        for fn_call in response.function_calls:
+            fn_name = fn_call.name
+            fn_args = fn_call.args
+            logger.info(f"Agent executing tool: {fn_name}({fn_args})")
+            
+            tool_func = next((t for t in SWARM_TOOLS if t.__name__ == fn_name), None)
+            if tool_func:
+                try:
+                    if isinstance(fn_args, dict):
+                        result = tool_func(**fn_args)
+                    else:
+                        result = tool_func()
+                except Exception as e:
+                    result = f"Error executing tool: {str(e)}"
+            else:
+                result = f"Tool {fn_name} not found"
+                
+            parts.append(genai.types.Part.from_function_response(name=fn_name, response={"result": result}))
+            
+        fn_resp_kwargs = {
+            "model": agent_model,
+            "contents": parts,
+            "config": {
+                "system_instruction": system_prompt,
+                "store": True,
+                "previous_interaction_id": getattr(response, "name", getattr(response, "id", None)),
+                "tools": SWARM_TOOLS
+            }
+        }
+        response = await asyncio.to_thread(client.interactions.create, **fn_resp_kwargs)
+        
+    winner_message = serialize_response_parts(response)
+    new_canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
+    return winner_message, new_canonical_interaction_id
 
 async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig) -> None:
     """Run the non-linear event-driven loop for a language-based simulation using Interactions API."""
@@ -178,19 +238,9 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
-                    kwargs = {
-                        "model": agent_model,
-                        "contents": "The conversation has stalled. Provide your next response.",
-                        "config": {"system_instruction": system_prompt, "store": True}
-                    }
-                    if canonical_interaction_id:
-                        kwargs["config"]["previous_interaction_id"] = canonical_interaction_id
-                    else:
-                        kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + kwargs["contents"])]
-                        
-                    response = await asyncio.to_thread(client.interactions.create, **kwargs)
-                    winner_message = serialize_response_parts(response)
-                    canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
+                    winner_message, canonical_interaction_id = await _execute_turn_with_tools(
+                        client, agent_model, system_prompt, "The conversation has stalled. Provide your next response.", canonical_interaction_id, history_parts
+                    )
                     await queue.put((-10, fifo_counter, agent_name, winner_message))
                     fifo_counter += 1
                 except Exception as e:
@@ -206,19 +256,9 @@ async def run_simulation_loop(session_id: str, config: LanguageSimulationConfig)
                 agent_model = agent.get("model", "gemini-2.5-flash-8b")
                 
                 try:
-                    kwargs = {
-                        "model": agent_model,
-                        "contents": "It is your turn to speak.",
-                        "config": {"system_instruction": system_prompt, "store": True}
-                    }
-                    if canonical_interaction_id:
-                        kwargs["config"]["previous_interaction_id"] = canonical_interaction_id
-                    else:
-                        kwargs["contents"] = [genai.types.Part.from_text("History:\n")] + history_parts + [genai.types.Part.from_text("\n\n" + kwargs["contents"])]
-                        
-                    response = await asyncio.to_thread(client.interactions.create, **kwargs)
-                    winner_message = serialize_response_parts(response)
-                    canonical_interaction_id = getattr(response, "name", getattr(response, "id", None))
+                    winner_message, canonical_interaction_id = await _execute_turn_with_tools(
+                        client, agent_model, system_prompt, "It is your turn to speak.", canonical_interaction_id, history_parts
+                    )
                 except Exception as e:
                     logger.error(f"Error updating canonical interaction state: {e}")
                     return
