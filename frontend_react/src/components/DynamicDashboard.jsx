@@ -4,6 +4,7 @@ import { apiClient } from '../api';
 import SimulationConfig from './SimulationConfig';
 import C2Terminal from './C2Terminal';
 import ProductionSwarmVisualizer from './ProductionSwarmVisualizer';
+import WidgetEngine from './WidgetEngine';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -40,6 +41,7 @@ const DynamicDashboard = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [agentsState, setAgentsState] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [localState, setLocalState] = useState({});
 
   useEffect(() => {
     const fetchSchema = async () => {
@@ -97,8 +99,8 @@ const DynamicDashboard = () => {
       }
     }
     
-    // Future expansion: generic WidgetEngine rendering based on element.type
-    return <div className="p-4 text-gray-500">Generic element rendering pending...</div>;
+    // Generic UI Primitive rendering
+    return <WidgetEngine element={element} localState={localState} setLocalState={setLocalState} />;
   };
 
   const PanelWrapper = ({ panel }) => {
