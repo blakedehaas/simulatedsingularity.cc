@@ -1,7 +1,7 @@
 import pytest
-from singularity.orchestration.swarm_state import SwarmState
-from singularity.orchestration.swarm_graph import create_swarm_graph, topology_router
-from singularity.core.agent_base import ConnectionFeedback
+from singularity.swarm_orchestration.swarm_state import SwarmState
+from singularity.swarm_orchestration.swarm_graph import create_swarm_graph, topology_router
+from singularity.neural_core.node_base import SynapticWeightFeedback
 from langchain_core.messages import AIMessage
 from langgraph.constants import Send
 

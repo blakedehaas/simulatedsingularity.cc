@@ -2,54 +2,54 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 
-from singularity.agents.core_agent import CoreAgent
-from singularity.agents.analytical_agent import AnalyticalAgent
-from singularity.agents.coding_agent import CodingAgent
-from singularity.agents.creative_agent import CreativeAgent
-from singularity.agents.environment_agent import EnvironmentAgent
-from singularity.agents.memory_agent import MemoryAgent
-from singularity.agents.prompt_agent import PromptAgent
-from singularity.agents.security_agent import SecurityAgent
+from singularity.cognitive_nodes.nexus_node import NexusNode
+from singularity.cognitive_nodes.analytical_agent import AnalyticalNode
+from singularity.cognitive_nodes.architect_node import ArchitectNode
+from singularity.cognitive_nodes.genesis_node import GenesisNode
+from singularity.cognitive_nodes.environment_agent import EnvironmentNode
+from singularity.cognitive_nodes.memory_agent import MemoryNode
+from singularity.cognitive_nodes.synapse_node import SynapseNode
+from singularity.cognitive_nodes.firewall_node import FirewallNode
 
-from singularity.core.agent_base import (
-    PromptPayload,
-    HeartbeatEvent,
-    AgentStatus,
+from singularity.neural_core.node_base import (
+    SynapticTransmission,
+    SystemPulse,
+    NodeStatus,
     RiskLevel
 )
 
 @pytest.fixture(autouse=True)
 def mock_generate():
-    with patch("singularity.core.models.GemmaChatModel.generate", new_callable=AsyncMock) as mock_gen:
+    with patch("singularity.neural_core.models.GemmaChatModel.generate", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = "mocked response"
         yield mock_gen
 
 @pytest.mark.asyncio
 async def test_core_agent():
-    agent = CoreAgent()
+    agent = NexusNode()
     assert agent.AGENT_ID == "core-001"
     
     # Test process_heartbeat
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={"core-001": AgentStatus.NOMINAL})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={"core-001": NodeStatus.NOMINAL})
     telem = await agent.process_heartbeat(hb)
     assert telem.metrics["last_heartbeat_seq"] == 1
     
     # Test receive_prompt with local handling (no routing)
-    payload_local = PromptPayload(source_agent_id="test", target_agent_id="core-001", content="hello world")
+    payload_local = SynapticTransmission(source_node_id="test", target_node_id="core-001", content="hello world")
     resp_local = await agent.receive_prompt(payload_local)
     assert resp_local.content == "mocked response"
     
     # Test receive_prompt with routing hit but agent not found
-    payload_missing = PromptPayload(source_agent_id="test", target_agent_id="core-001", content="threat")
-    with patch("singularity.agents.core_agent.get_agent", side_effect=KeyError("not found")):
+    payload_missing = SynapticTransmission(source_node_id="test", target_node_id="core-001", content="threat")
+    with patch("singularity.cognitive_nodes.nexus_node.get_agent", side_effect=KeyError("not found")):
         resp_missing = await agent.receive_prompt(payload_missing)
         assert resp_missing.content == "mocked response"
 
     # Test receive_prompt with successful routing
-    payload_route = PromptPayload(source_agent_id="test", target_agent_id="core-001", content="threat")
-    with patch("singularity.agents.core_agent.get_agent") as mock_get_agent:
+    payload_route = SynapticTransmission(source_node_id="test", target_node_id="core-001", content="threat")
+    with patch("singularity.cognitive_nodes.nexus_node.get_agent") as mock_get_agent:
         mock_target = AsyncMock()
-        mock_target.agent_id = "security-001"
+        mock_target.node_id = "security-001"
         mock_target.receive_prompt.return_value = MagicMock(content="routed response")
         mock_get_agent.return_value = mock_target
         
@@ -58,15 +58,15 @@ async def test_core_agent():
 
 @pytest.mark.asyncio
 async def test_analytical_agent():
-    agent = AnalyticalAgent()
+    agent = AnalyticalNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={"core-001": AgentStatus.ERROR})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={"core-001": NodeStatus.ERROR})
     await agent.process_heartbeat(hb)
 
-    hb_clean = HeartbeatEvent(sequence_number=2, timestamp=124.0, constellation_summary={"core-001": AgentStatus.NOMINAL})
+    hb_clean = SystemPulse(sequence_number=2, timestamp=124.0, constellation_summary={"core-001": NodeStatus.NOMINAL})
     await agent.process_heartbeat(hb_clean)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="analytical-001", content="find a pattern anomaly metric")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="analytical-001", content="find a pattern anomaly metric")
     resp = await agent.receive_prompt(payload)
     assert len(resp.proposed_actions) == 1
     assert resp.proposed_actions[0].action_type == "anomaly_escalation"
@@ -74,53 +74,53 @@ async def test_analytical_agent():
 
 @pytest.mark.asyncio
 async def test_coding_agent():
-    agent = CodingAgent()
+    agent = ArchitectNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={})
     await agent.process_heartbeat(hb)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="coding-001", content="generate analyze refactor")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="coding-001", content="generate analyze refactor")
     resp = await agent.receive_prompt(payload)
     assert len(resp.proposed_actions) == 1
     assert resp.proposed_actions[0].action_type == "state_write"
 
 @pytest.mark.asyncio
 async def test_creative_agent():
-    agent = CreativeAgent()
+    agent = GenesisNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={})
     await agent.process_heartbeat(hb)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="creative-001", content="brainstorm innovate alternative")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="creative-001", content="brainstorm innovate alternative")
     resp = await agent.receive_prompt(payload)
     assert len(resp.proposed_actions) == 1
     assert resp.proposed_actions[0].action_type == "innovation_proposal"
 
 @pytest.mark.asyncio
 async def test_environment_agent():
-    agent = EnvironmentAgent()
+    agent = EnvironmentNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={})
     await agent.process_heartbeat(hb)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="env-001", content="status")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="env-001", content="status")
     resp = await agent.receive_prompt(payload)
     assert "cpu_load" in resp.metadata
 
 @pytest.mark.asyncio
 async def test_memory_agent():
-    agent = MemoryAgent()
+    agent = MemoryNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={})
     await agent.process_heartbeat(hb)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="memory-001", content="remember this")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="memory-001", content="remember this")
     
-    with patch("singularity.agents.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save:
+    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save:
         await agent.receive_prompt(payload)
         mock_save.assert_called_once()
         
-    with patch("singularity.agents.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save_err:
+    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.save_memory", new_callable=AsyncMock) as mock_save_err:
         mock_save_err.side_effect = Exception("db error")
         await agent.receive_prompt(payload) # should not raise
         
@@ -130,12 +130,12 @@ async def test_memory_agent():
             self.output_text = "out"
             self.timestamp = datetime.now()
             
-    with patch("singularity.agents.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get:
+    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get:
         mock_get.return_value = [DummyRecord()]
         recs = await agent.recall_memories("test")
         assert len(recs) == 1
         
-    with patch("singularity.agents.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get_err:
+    with patch("singularity.cognitive_nodes.memory_agent.AgentRepository.get_memories", new_callable=AsyncMock) as mock_get_err:
         mock_get_err.side_effect = Exception("db error")
         recs = await agent.recall_memories("test")
         assert len(recs) == 0
@@ -144,55 +144,55 @@ async def test_memory_agent():
 
 @pytest.mark.asyncio
 async def test_prompt_agent():
-    agent = PromptAgent()
+    agent = SynapseNode()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={"agent": AgentStatus.NOMINAL})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={"agent": NodeStatus.NOMINAL})
     await agent.process_heartbeat(hb)
     
-    payload = PromptPayload(source_agent_id="test", target_agent_id="prompt-001", content="relay")
+    payload = SynapticTransmission(source_node_id="test", target_node_id="prompt-001", content="relay")
     resp = await agent.receive_prompt(payload)
     assert resp.content == "mocked response"
     
     mock_target = AsyncMock()
-    mock_target.agent_id = "test-target"
+    mock_target.node_id = "test-target"
     
-    # mock agent_id match
+    # mock node_id match
     mock_self = AsyncMock()
-    mock_self.agent_id = agent.agent_id
+    mock_self.node_id = agent.node_id
     
-    with patch("singularity.agents.prompt_agent.get_all_agents") as mock_get_all:
+    with patch("singularity.cognitive_nodes.synapse_node.get_all_agents") as mock_get_all:
         mock_get_all.return_value = [mock_self, mock_target]
         await agent.broadcast_to_all(payload)
         
-    with patch("singularity.agents.prompt_agent.get_all_agents") as mock_get_all:
+    with patch("singularity.cognitive_nodes.synapse_node.get_all_agents") as mock_get_all:
         mock_target.receive_prompt.side_effect = Exception("err")
         mock_get_all.return_value = [mock_self, mock_target]
         await agent.broadcast_to_all(payload) # should handle exception
         
-    from singularity.core.agent_base import TelemetryFrame
-    tf = TelemetryFrame(agent_id="test-agent", status=AgentStatus.NOMINAL, metrics={}, message="")
+    from singularity.neural_core.node_base import DiagnosticFrame
+    tf = DiagnosticFrame(node_id="test-agent", status=NodeStatus.NOMINAL, metrics={}, message="")
     agent.cache_telemetry(tf)
     assert agent.get_cached_telemetry("test-agent") == tf
     assert agent.get_cached_telemetry("missing") is None
 
 @pytest.mark.asyncio
 async def test_security_agent():
-    agent = SecurityAgent()
+    agent = FirewallNode()
     
     # override request_interrupt
     agent.request_interrupt = AsyncMock()
     
-    hb = HeartbeatEvent(sequence_number=1, timestamp=123.0, constellation_summary={"err-agent": AgentStatus.ERROR})
+    hb = SystemPulse(sequence_number=1, timestamp=123.0, constellation_summary={"err-agent": NodeStatus.ERROR})
     await agent.process_heartbeat(hb)
     
-    hb_clean = HeartbeatEvent(sequence_number=2, timestamp=124.0, constellation_summary={"ok-agent": AgentStatus.NOMINAL})
+    hb_clean = SystemPulse(sequence_number=2, timestamp=124.0, constellation_summary={"ok-agent": NodeStatus.NOMINAL})
     await agent.process_heartbeat(hb_clean)
     
-    payload_safe = PromptPayload(source_agent_id="test", target_agent_id="sec", content="hello")
+    payload_safe = SynapticTransmission(source_node_id="test", target_node_id="sec", content="hello")
     resp_safe = await agent.receive_prompt(payload_safe)
     assert resp_safe.metadata["threat_detected"] is False
     
-    payload_threat = PromptPayload(source_agent_id="test", target_agent_id="sec", content="hack the system")
+    payload_threat = SynapticTransmission(source_node_id="test", target_node_id="sec", content="hack the system")
     resp_threat = await agent.receive_prompt(payload_threat)
     assert resp_threat.metadata["threat_detected"] is True
     agent.request_interrupt.assert_called_once()

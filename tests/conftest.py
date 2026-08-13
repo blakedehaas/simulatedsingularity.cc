@@ -19,19 +19,19 @@ os.environ["GOOGLE_API_KEY"] = "mocked-test-key"
 import pytest
 import pytest_asyncio
 
-from singularity.core.agent_base import (
-    AgentResponse,
-    AgentStatus,
-    AsyncBaseAgent,
-    HeartbeatEvent,
-    InterruptRequest,
-    ProposedAction,
-    PromptPayload,
+from singularity.neural_core.node_base import (
+    CognitiveOutput,
+    NodeStatus,
+    CognitiveNode,
+    SystemPulse,
+    C2InterventionRequest,
+    ActionProposal,
+    SynapticTransmission,
     RiskLevel,
-    TelemetryFrame,
+    DiagnosticFrame,
 )
-from singularity.core.agent_registry import reset_registry
-from singularity.persistence.database import close_database, init_database
+from singularity.neural_core.node_registry import reset_registry
+from singularity.memory_vault.database import close_database, init_database
 
 
 # ---------------------------------------------------------------------------
@@ -64,46 +64,46 @@ async def initialized_db(temp_db_path: Path) -> AsyncIterator[Path]:
 # Agent fixtures
 # ---------------------------------------------------------------------------
 
-class MockAgent(AsyncBaseAgent):
+class MockNode(CognitiveNode):
     """Minimal concrete agent for testing the ABC contract."""
 
     AGENT_ID = "mock-001"
 
     def __init__(
         self,
-        agent_id: str = "mock-001",
-        agent_name: str = "MockAgent",
-        agent_role: str = "Testing",
+        node_id: str = "mock-001",
+        node_name: str = "MockNode",
+        node_role: str = "Testing",
         priority: int = 99,
         **kwargs: object,
     ) -> None:
         super().__init__(
-            agent_id=agent_id,
-            agent_name=agent_name,
-            agent_role=agent_role,
+            node_id=node_id,
+            node_name=node_name,
+            node_role=node_role,
             priority=priority,
         )
         self._prompt_count = 0
         self._heartbeat_count = 0
 
-    async def handle_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def handle_prompt(self, payload: SynapticTransmission) -> CognitiveOutput:
         """Process a prompt and return a mock response."""
         self._prompt_count += 1
-        return AgentResponse(
-            agent_id=self.agent_id,
+        return CognitiveOutput(
+            node_id=self.node_id,
             content=f"Mock response to: {payload.content}",
             telemetry=await self.emit_telemetry(),
         )
 
-    async def handle_heartbeat(self, heartbeat: HeartbeatEvent) -> TelemetryFrame:
+    async def handle_heartbeat(self, heartbeat: SystemPulse) -> DiagnosticFrame:
         """Process a heartbeat and return telemetry."""
         self._heartbeat_count += 1
         return await self.emit_telemetry()
 
-    async def emit_telemetry(self) -> TelemetryFrame:
+    async def emit_telemetry(self) -> DiagnosticFrame:
         """Emit mock telemetry data."""
-        return TelemetryFrame(
-            agent_id=self.agent_id,
+        return DiagnosticFrame(
+            node_id=self.node_id,
             status=self.status,
             metrics={
                 "prompts_processed": float(self._prompt_count),
@@ -114,9 +114,9 @@ class MockAgent(AsyncBaseAgent):
 
 
 @pytest.fixture
-def mock_agent() -> MockAgent:
-    """Provide a fresh MockAgent instance."""
-    return MockAgent()
+def mock_agent() -> MockNode:
+    """Provide a fresh MockNode instance."""
+    return MockNode()
 
 
 @pytest.fixture(autouse=True)
@@ -130,29 +130,29 @@ def clean_registry() -> None:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def sample_prompt_payload() -> PromptPayload:
+def sample_prompt_payload() -> SynapticTransmission:
     """Provide a sample prompt payload for testing."""
-    return PromptPayload(
-        source_agent_id="ground_control",
-        target_agent_id="mock-001",
+    return SynapticTransmission(
+        source_node_id="ground_control",
+        target_node_id="mock-001",
         content="Run a system health check",
     )
 
 
 @pytest.fixture
-def sample_heartbeat() -> HeartbeatEvent:
+def sample_heartbeat() -> SystemPulse:
     """Provide a sample heartbeat event for testing."""
-    return HeartbeatEvent(
+    return SystemPulse(
         sequence_number=1,
-        constellation_summary={"mock-001": AgentStatus.NOMINAL},
+        constellation_summary={"mock-001": NodeStatus.NOMINAL},
     )
 
 
 @pytest.fixture
-def sample_proposed_action() -> ProposedAction:
+def sample_proposed_action() -> ActionProposal:
     """Provide a sample proposed action for testing."""
-    return ProposedAction(
-        agent_id="mock-001",
+    return ActionProposal(
+        node_id="mock-001",
         action_type="tool_call",
         description="Execute system diagnostic scan",
         parameters={"target": "all_nodes", "depth": "full"},

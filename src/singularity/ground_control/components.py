@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 
 from chainlit import Action, Message
 
-from singularity.core.agent_base import (
-    AgentStatus,
-    AsyncBaseAgent,
-    InterruptRequest,
+from singularity.neural_core.node_base import (
+    NodeStatus,
+    CognitiveNode,
+    C2InterventionRequest,
     RiskLevel,
 )
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Sync prompt approval card
 # ---------------------------------------------------------------------------
 
-def build_sync_prompt_card(interrupt: InterruptRequest) -> Message:
+def build_sync_prompt_card(interrupt: C2InterventionRequest) -> Message:
     """Build a Chainlit Message with Approve/Deny buttons for a sync prompt.
 
     Renders the proposed action details (type, description, risk level,
@@ -55,7 +55,7 @@ def build_sync_prompt_card(interrupt: InterruptRequest) -> Message:
     lines: list[str] = [
         "## 🚨 Sync Prompt — Action Requires Approval",
         "",
-        f"**Agent**: `{action.agent_id}`",
+        f"**Agent**: `{action.node_id}`",
         f"**Action Type**: `{action.action_type}`",
         f"**Risk Level**: {risk_display}",
         f"**Action ID**: `{action.action_id}`",
@@ -106,7 +106,7 @@ def build_sync_prompt_card(interrupt: InterruptRequest) -> Message:
 # Constellation overview
 # ---------------------------------------------------------------------------
 
-def build_constellation_overview(agents: list[AsyncBaseAgent]) -> str:
+def build_constellation_overview(agents: list[CognitiveNode]) -> str:
     """Build a Markdown table summarizing the status of all agents.
 
     Renders each agent's ID, name, role, priority, and current status
@@ -118,13 +118,13 @@ def build_constellation_overview(agents: list[AsyncBaseAgent]) -> str:
     Returns:
         A Markdown-formatted string containing the status table.
     """
-    status_emoji: dict[AgentStatus, str] = {
-        AgentStatus.INITIALIZING: "🔄",
-        AgentStatus.NOMINAL: "🟢",
-        AgentStatus.BUSY: "🟡",
-        AgentStatus.INTERRUPTED: "🟠",
-        AgentStatus.ERROR: "🔴",
-        AgentStatus.OFFLINE: "⚫",
+    status_emoji: dict[NodeStatus, str] = {
+        NodeStatus.INITIALIZING: "🔄",
+        NodeStatus.NOMINAL: "🟢",
+        NodeStatus.BUSY: "🟡",
+        NodeStatus.INTERRUPTED: "🟠",
+        NodeStatus.ERROR: "🔴",
+        NodeStatus.OFFLINE: "⚫",
     }
 
     lines: list[str] = [
@@ -138,17 +138,17 @@ def build_constellation_overview(agents: list[AsyncBaseAgent]) -> str:
         emoji = status_emoji.get(agent.status, "⚪")
         lines.append(
             f"| {emoji} `{agent.status.value}` "
-            f"| **{agent.agent_name}** (`{agent.agent_id}`) "
-            f"| {agent.agent_role} "
+            f"| **{agent.node_name}** (`{agent.node_id}`) "
+            f"| {agent.node_role} "
             f"| {agent.priority} |"
         )
 
     lines.extend([
         "",
         f"**Total agents**: {len(agents)} | "
-        f"**Nominal**: {sum(1 for a in agents if a.status == AgentStatus.NOMINAL)} | "
+        f"**Nominal**: {sum(1 for a in agents if a.status == NodeStatus.NOMINAL)} | "
         f"**Degraded**: "
-        f"{sum(1 for a in agents if a.status in (AgentStatus.ERROR, AgentStatus.INTERRUPTED))}",
+        f"{sum(1 for a in agents if a.status in (NodeStatus.ERROR, NodeStatus.INTERRUPTED))}",
     ])
 
     return "\n".join(lines)
@@ -158,7 +158,7 @@ def build_constellation_overview(agents: list[AsyncBaseAgent]) -> str:
 # Triadic Constellation overview
 # ---------------------------------------------------------------------------
 
-def build_triadic_overview(agents: list[AsyncBaseAgent]) -> str:
+def build_triadic_overview(agents: list[CognitiveNode]) -> str:
     """Build a compact status panel for the triadic architecture.
 
     Shows Orchestrator, Safeguard, and Synthesis with their statuses.
@@ -170,13 +170,13 @@ def build_triadic_overview(agents: list[AsyncBaseAgent]) -> str:
     Returns:
         A Markdown-formatted string containing the triadic table.
     """
-    status_emoji: dict[AgentStatus, str] = {
-        AgentStatus.INITIALIZING: "🔄",
-        AgentStatus.NOMINAL: "🟢",
-        AgentStatus.BUSY: "🟡",
-        AgentStatus.INTERRUPTED: "🟠",
-        AgentStatus.ERROR: "🔴",
-        AgentStatus.OFFLINE: "⚫",
+    status_emoji: dict[NodeStatus, str] = {
+        NodeStatus.INITIALIZING: "🔄",
+        NodeStatus.NOMINAL: "🟢",
+        NodeStatus.BUSY: "🟡",
+        NodeStatus.INTERRUPTED: "🟠",
+        NodeStatus.ERROR: "🔴",
+        NodeStatus.OFFLINE: "⚫",
     }
     
     triadic_roles = {
@@ -193,13 +193,13 @@ def build_triadic_overview(agents: list[AsyncBaseAgent]) -> str:
     ]
 
     # Filter strictly to the 3 triadic nodes
-    triadic_agents = [a for a in agents if a.agent_id in triadic_roles]
+    triadic_agents = [a for a in agents if a.node_id in triadic_roles]
 
     for agent in triadic_agents:
         emoji = status_emoji.get(agent.status, "⚪")
-        role_desc = triadic_roles.get(agent.agent_id, "Unknown")
+        role_desc = triadic_roles.get(agent.node_id, "Unknown")
         lines.append(
-            f"| **{agent.agent_name}** (`{agent.agent_id}`) "
+            f"| **{agent.node_name}** (`{agent.node_id}`) "
             f"| {emoji} `{agent.status.value}` "
             f"| {role_desc} |"
         )

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from singularity.scheduler.heartbeat import HeartbeatScheduler
-from singularity.core.agent_base import AgentStatus, TelemetryFrame
+from singularity.neural_core.node_base import NodeStatus, DiagnosticFrame
 
 @pytest.fixture
 def scheduler():

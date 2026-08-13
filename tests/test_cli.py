@@ -94,8 +94,8 @@ def test_main_default(mock_print_help):
 
 def test_run_autonomous_interrupt():
     from singularity.cli import run_autonomous
-    with patch('singularity.core.agent_registry.initialize_constellation'), \
-         patch('singularity.orchestration.graph.build_graph'):
+    with patch('singularity.neural_core.node_registry.initialize_constellation'), \
+         patch('singularity.swarm_orchestration.graph.build_graph'):
         # Mock the while loop to raise KeyboardInterrupt
         with patch('singularity.cli.True', False):
             pass

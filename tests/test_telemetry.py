@@ -2,9 +2,9 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock
 
-from singularity.telemetry.events import TelemetryEventBus, TelemetryEvent, TelemetryEventType
-from singularity.telemetry.collector import TelemetryCollector
-from singularity.core.agent_base import TelemetryFrame, AgentStatus
+from singularity.sensorium.events import TelemetryEventBus, TelemetryEvent, TelemetryEventType
+from singularity.sensorium.collector import TelemetryCollector
+from singularity.neural_core.node_base import DiagnosticFrame, NodeStatus
 
 @pytest.fixture
 def event_bus():
@@ -25,7 +25,7 @@ async def test_event_bus_publish(event_bus):
     event_bus.subscribe(TelemetryEventType.HEARTBEAT, handler)
     event = TelemetryEvent(
         event_type=TelemetryEventType.HEARTBEAT,
-        source_agent_id="test",
+        source_node_id="test",
         data={"test": "data"}
     )
     await event_bus.publish(event)
@@ -35,16 +35,16 @@ async def test_event_bus_publish(event_bus):
 
 @pytest.mark.asyncio
 async def test_collector_record(collector, event_bus):
-    frame = TelemetryFrame(
-        agent_id="test-agent",
-        status=AgentStatus.NOMINAL,
+    frame = DiagnosticFrame(
+        node_id="test-agent",
+        status=NodeStatus.NOMINAL,
         metrics={"cpu": 10.0},
         message="Test message"
     )
     
     event = TelemetryEvent(
         event_type=TelemetryEventType.AGENT_RESPONSE,
-        source_agent_id="test-agent",
+        source_node_id="test-agent",
         data={"telemetry": frame.model_dump()}
     )
     await event_bus.publish(event)
@@ -54,4 +54,4 @@ async def test_collector_record(collector, event_bus):
     
     latest_frame = collector.get_latest_frame("test-agent")
     assert latest_frame is not None
-    assert latest_frame.agent_id == "test-agent"
+    assert latest_frame.node_id == "test-agent"

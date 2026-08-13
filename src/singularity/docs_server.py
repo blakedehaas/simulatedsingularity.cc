@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle hook to initialize RAG and DB components on startup."""
     global llm
     try:
-        from singularity.persistence.database import init_database
+        from singularity.memory_vault.database import init_database
         await init_database()
     except Exception as e:
         logger.error("Failed to initialize database: %s", e)
@@ -245,9 +245,9 @@ async def ping_endpoint():
 async def triadic_heartbeat_api(request: Request):
     """Broadcast a timestamped heartbeat prompt to all 3 triadic agents."""
     from datetime import datetime, timezone
-    from singularity.core.agent_registry import initialize_constellation, get_all_agents
+    from singularity.neural_core.node_registry import initialize_constellation, get_all_agents
     from singularity.scheduler.heartbeat import HeartbeatScheduler
-    import singularity.agents
+    import singularity.cognitive_nodes
 
     agents = get_all_agents()
     if not agents:
@@ -263,7 +263,7 @@ async def triadic_heartbeat_api(request: Request):
         "sequence_number": scheduler.sequence_number,
         "frames": [
             {
-                "agent_id": f.agent_id,
+                "node_id": f.node_id,
                 "status": f.status.value,
                 "metrics": f.metrics,
                 "message": f.message,

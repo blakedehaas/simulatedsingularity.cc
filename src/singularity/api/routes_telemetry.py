@@ -4,8 +4,8 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy.future import select
 
-from singularity.persistence.database import get_session
-from singularity.persistence.models import SimulationMessage
+from singularity.memory_vault.database import get_session
+from singularity.memory_vault.models import SimulationMessage
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class TelemetryLogEntry(BaseModel):
     timestamp: str
     level: str
     message: str
-    agent_id: str | None = None
+    node_id: str | None = None
 
 class TelemetryLogsResponse(BaseModel):
     logs: list[TelemetryLogEntry]

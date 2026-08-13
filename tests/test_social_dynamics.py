@@ -1,6 +1,6 @@
 import pytest
-from singularity.orchestration.swarm_state import SwarmState
-from singularity.orchestration.social_dynamics import detect_clusters, assign_hierarchy
+from singularity.swarm_orchestration.swarm_state import SwarmState
+from singularity.swarm_orchestration.social_dynamics import detect_clusters, assign_hierarchy
 
 def test_detect_clusters():
     """Test finding connected components with weight >= 0.5."""

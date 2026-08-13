@@ -6,13 +6,13 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.future import select
 
-from singularity.persistence.database import get_session
-from singularity.persistence.models import (
+from singularity.memory_vault.database import get_session
+from singularity.memory_vault.models import (
     SimulationSession,
     SimulationMessage,
     LanguageSimulationConfig
 )
-from singularity.core.language_simulation import run_simulation_loop
+from singularity.neural_core.language_simulation import run_simulation_loop
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,7 @@ async def start_language_simulation(sim_id: str, background_tasks: BackgroundTas
 @router.post("/{sim_id}/kill")
 async def kill_simulation(sim_id: str) -> dict[str, Any]:
     """Signal the active simulation loop to terminate."""
-    from singularity.core.language_simulation import active_shutdown_signals
+    from singularity.neural_core.language_simulation import active_shutdown_signals
     active_shutdown_signals.add(sim_id)
     logger.info(f"Received kill signal for session {sim_id}")
     return {"status": "kill_signal_sent", "sim_id": sim_id}

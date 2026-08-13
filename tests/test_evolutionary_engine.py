@@ -1,6 +1,6 @@
 import pytest
-from singularity.orchestration.swarm_state import SwarmState
-from singularity.orchestration.evolutionary_engine import mutate_topology, MIN_WEIGHT, MAX_WEIGHT
+from singularity.swarm_orchestration.swarm_state import SwarmState
+from singularity.swarm_orchestration.evolutionary_engine import mutate_topology, MIN_WEIGHT, MAX_WEIGHT
 from langchain_core.messages import AIMessage
 
 def test_mutate_topology_bounds():

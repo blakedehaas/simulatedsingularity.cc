@@ -1,6 +1,6 @@
 import pytest
 from typing import TypedDict
-from singularity.orchestration.state import ConstellationState
+from singularity.swarm_orchestration.state import ConstellationState
 
 def test_constellation_state_init():
     # ConstellationState is essentially just a TypedDict schema, we can test it by instantiating a dict

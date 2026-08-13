@@ -37,13 +37,13 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
     if (setAgentsState) setAgentsState(newAgents);
   };
 
-  const handleAddAgent = () => {
+  const handleAddNode = () => {
     const newAgents = [...agents, { name: '', system_prompt: '', model: 'gemini-2.5-flash-8b' }];
     setAgents(newAgents);
     if (setAgentsState) setAgentsState(newAgents);
   };
 
-  const handleRemoveAgent = (index) => {
+  const handleRemoveNode = (index) => {
     const newAgents = agents.filter((_, i) => i !== index);
     setAgents(newAgents);
     if (setAgentsState) setAgentsState(newAgents);
@@ -278,7 +278,7 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
           <div className="flex items-center justify-between border-b border-gray-800 pb-2">
             <label className="text-xs uppercase text-gray-500">Agents Matrix</label>
             <button 
-              onClick={handleAddAgent}
+              onClick={handleAddNode}
               className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 rounded transition-colors"
             >
               + ADD AGENT
@@ -291,7 +291,7 @@ const SimulationConfig = ({ simId, setSimId, isRunning, setIsRunning, setAgentsS
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-purple-400">Agent Node {index + 1}</span>
                   <button 
-                    onClick={() => handleRemoveAgent(index)}
+                    onClick={() => handleRemoveNode(index)}
                     className="text-xs text-red-500 hover:text-red-400"
                   >
                     [REMOVE]

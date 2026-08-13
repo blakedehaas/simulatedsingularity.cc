@@ -14,20 +14,20 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from singularity.core.agent_base import (
-    AgentResponse,
-    AgentStatus,
-    HeartbeatEvent,
-    InterruptRequest,
-    PromptPayload,
-    TelemetryFrame,
+from singularity.neural_core.node_base import (
+    CognitiveOutput,
+    NodeStatus,
+    SystemPulse,
+    C2InterventionRequest,
+    SynapticTransmission,
+    DiagnosticFrame,
 )
-from singularity.core.agent_registry import get_agent, get_all_agents
-from singularity.persistence.repository import (
+from singularity.neural_core.node_registry import get_agent, get_all_agents
+from singularity.memory_vault.repository import (
     LogRepository,
     StateRepository,
 )
-from singularity.telemetry.events import (
+from singularity.sensorium.events import (
     TelemetryEvent,
     TelemetryEventType,
     get_event_bus,
@@ -47,9 +47,9 @@ def _utc_now() -> datetime:
 
 async def handle_user_prompt(
     message_content: str,
-    target_agent_id: str | None = None,
-) -> tuple[AgentResponse | None, str]:
-    """Wrap operator input as a PromptPayload and route through agents.
+    target_node_id: str | None = None,
+) -> tuple[CognitiveOutput | None, str]:
+    """Wrap operator input as a SynapticTransmission and route through agents.
 
     Sends the prompt to the requested target agent, or the first available
     agent (by priority order) if no target is specified.
@@ -57,10 +57,10 @@ async def handle_user_prompt(
 
     Args:
         message_content: Raw text from the Ground Control operator.
-        target_agent_id: The ID of the agent to route to directly.
+        target_node_id: The ID of the agent to route to directly.
 
     Returns:
-        A tuple of ``(AgentResponse, formatted_display_text)``.  If no
+        A tuple of ``(CognitiveOutput, formatted_display_text)``.  If no
         agents are available, returns ``(None, error_message)``.
     """
     agents = get_all_agents()
@@ -73,22 +73,22 @@ async def handle_user_prompt(
 
     # Route to the requested agent or fallback to the highest-priority agent
     target_agent = agents[0]
-    if target_agent_id:
+    if target_node_id:
         try:
-            target_agent = get_agent(target_agent_id)
+            target_agent = get_agent(target_node_id)
         except KeyError:
-            logger.warning("Target agent %s not found, falling back to %s", target_agent_id, target_agent.agent_id)
+            logger.warning("Target agent %s not found, falling back to %s", target_node_id, target_agent.node_id)
 
-    payload = PromptPayload(
-        source_agent_id="ground_control",
-        target_agent_id=target_agent.agent_id,
+    payload = SynapticTransmission(
+        source_node_id="ground_control",
+        target_node_id=target_agent.node_id,
         content=message_content,
     )
 
     logger.info(
         "Routing prompt to %s (%s)",
-        target_agent.agent_name,
-        target_agent.agent_id,
+        target_agent.node_name,
+        target_agent.node_id,
     )
 
     try:
@@ -97,11 +97,11 @@ async def handle_user_prompt(
         # Log the communication
         await LogRepository.log_communication(
             sender="ground_control",
-            recipient=target_agent.agent_id,
+            recipient=target_agent.node_id,
             message=message_content,
         )
         await LogRepository.log_communication(
-            sender=target_agent.agent_id,
+            sender=target_agent.node_id,
             recipient="ground_control",
             message=response.content,
         )
@@ -110,7 +110,7 @@ async def handle_user_prompt(
         bus = get_event_bus()
         await bus.publish(TelemetryEvent(
             event_type=TelemetryEventType.AGENT_RESPONSE,
-            source_agent_id=target_agent.agent_id,
+            source_node_id=target_agent.node_id,
             data={
                 "content": response.content,
                 "telemetry": response.telemetry.model_dump(mode="json"),
@@ -124,19 +124,19 @@ async def handle_user_prompt(
     except Exception:
         logger.exception(
             "Agent %s failed to process prompt",
-            target_agent.agent_id,
+            target_agent.node_id,
         )
 
         # Publish error event
         bus = get_event_bus()
         await bus.publish(TelemetryEvent(
             event_type=TelemetryEventType.ERROR,
-            source_agent_id=target_agent.agent_id,
+            source_node_id=target_agent.node_id,
             data={"message": f"Failed to process prompt: {message_content[:100]}"},
         ))
 
         error_text = (
-            f"❌ **Agent `{target_agent.agent_name}` failed to process "
+            f"❌ **Agent `{target_agent.node_name}` failed to process "
             f"the prompt.** The error has been logged."
         )
         return None, error_text
@@ -165,16 +165,16 @@ async def handle_triadic_prompt(
     global _triadic_graph
     
     try:
-        from singularity.orchestration.triadic_graph import (
+        from singularity.swarm_orchestration.triadic_graph import (
             build_triadic_graph,
             run_triadic_prompt,
         )
     except ImportError:
         return None, "❌ Triadic graph module not available."
         
-    from singularity.core.agent_registry import initialize_constellation, get_all_agents
-    from singularity.persistence.database import init_database
-    import singularity.agents
+    from singularity.neural_core.node_registry import initialize_constellation, get_all_agents
+    from singularity.memory_vault.database import init_database
+    import singularity.cognitive_nodes
 
     try:
         await init_database()
@@ -194,7 +194,7 @@ async def handle_triadic_prompt(
         # If it doesn't, we fallback to a generic message format
         response = final_state.get("final_response") if isinstance(final_state, dict) else None
         
-        if isinstance(response, AgentResponse):
+        if isinstance(response, CognitiveOutput):
             display_text = format_agent_response(response)
         else:
             display_text = "### 📐 Triadic Architecture Update\nGraph execution completed successfully."
@@ -220,7 +220,7 @@ async def handle_triadic_interrupt_response(
     global _triadic_graph
     
     try:
-        from singularity.orchestration.triadic_graph import build_triadic_graph
+        from singularity.swarm_orchestration.triadic_graph import build_triadic_graph
     except ImportError:
         return None, "❌ Triadic graph module not available."
         
@@ -233,7 +233,7 @@ async def handle_triadic_interrupt_response(
         
         response = final_state.get("final_response") if isinstance(final_state, dict) else None
         
-        if isinstance(response, AgentResponse):
+        if isinstance(response, CognitiveOutput):
             display_text = format_agent_response(response)
         else:
             display_text = "### 📐 Triadic Architecture Update\nGraph resumed and completed successfully."
@@ -311,11 +311,11 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
         return {"frames_collected": 0, "agents": [], "error": "No agents available"}
 
     # Build constellation summary from current statuses
-    constellation_summary: dict[str, AgentStatus] = {
-        agent.agent_id: agent.status for agent in agents
+    constellation_summary: dict[str, NodeStatus] = {
+        agent.node_id: agent.status for agent in agents
     }
 
-    heartbeat = HeartbeatEvent(
+    heartbeat = SystemPulse(
         sequence_number=0,  # Manual heartbeats use sequence 0
         constellation_summary=constellation_summary,
     )
@@ -327,7 +327,7 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
         try:
             frame = await agent.process_heartbeat(heartbeat)
             frames.append({
-                "agent_id": frame.agent_id,
+                "node_id": frame.node_id,
                 "status": frame.status.value,
                 "metrics": frame.metrics,
                 "message": frame.message,
@@ -335,9 +335,9 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
         except Exception:
             logger.exception(
                 "Heartbeat failed for agent %s",
-                agent.agent_id,
+                agent.node_id,
             )
-            errors.append(agent.agent_id)
+            errors.append(agent.node_id)
 
     result: dict[str, Any] = {
         "frames_collected": len(frames),
@@ -359,8 +359,8 @@ async def handle_heartbeat_trigger() -> dict[str, Any]:
 # Response formatting
 # ---------------------------------------------------------------------------
 
-def format_agent_response(response: AgentResponse) -> str:
-    """Format an AgentResponse for display in the Chainlit UI.
+def format_agent_response(response: CognitiveOutput) -> str:
+    """Format an CognitiveOutput for display in the Chainlit UI.
 
     Renders the response content, telemetry summary, and any proposed
     actions as a structured Markdown string.
@@ -371,20 +371,20 @@ def format_agent_response(response: AgentResponse) -> str:
     Returns:
         A Markdown-formatted string for display.
     """
-    status_emoji: dict[AgentStatus, str] = {
-        AgentStatus.INITIALIZING: "🔄",
-        AgentStatus.NOMINAL: "🟢",
-        AgentStatus.BUSY: "🟡",
-        AgentStatus.INTERRUPTED: "🟠",
-        AgentStatus.ERROR: "🔴",
-        AgentStatus.OFFLINE: "⚫",
+    status_emoji: dict[NodeStatus, str] = {
+        NodeStatus.INITIALIZING: "🔄",
+        NodeStatus.NOMINAL: "🟢",
+        NodeStatus.BUSY: "🟡",
+        NodeStatus.INTERRUPTED: "🟠",
+        NodeStatus.ERROR: "🔴",
+        NodeStatus.OFFLINE: "⚫",
     }
 
     telemetry = response.telemetry
     emoji = status_emoji.get(telemetry.status, "⚪")
 
     lines: list[str] = [
-        f"### 📡 Response from `{response.agent_id}`",
+        f"### 📡 Response from `{response.node_id}`",
         "",
         response.content,
         "",
@@ -415,8 +415,8 @@ def format_agent_response(response: AgentResponse) -> str:
     return "\n".join(lines)
 
 
-def format_telemetry(frame: TelemetryFrame) -> str:
-    """Format a TelemetryFrame as a compact status string.
+def format_telemetry(frame: DiagnosticFrame) -> str:
+    """Format a DiagnosticFrame as a compact status string.
 
     Intended for use as inline telemetry annotations in the Chainlit
     message stream.
@@ -427,20 +427,20 @@ def format_telemetry(frame: TelemetryFrame) -> str:
     Returns:
         A single-line Markdown-formatted telemetry summary.
     """
-    status_emoji: dict[AgentStatus, str] = {
-        AgentStatus.INITIALIZING: "🔄",
-        AgentStatus.NOMINAL: "🟢",
-        AgentStatus.BUSY: "🟡",
-        AgentStatus.INTERRUPTED: "🟠",
-        AgentStatus.ERROR: "🔴",
-        AgentStatus.OFFLINE: "⚫",
+    status_emoji: dict[NodeStatus, str] = {
+        NodeStatus.INITIALIZING: "🔄",
+        NodeStatus.NOMINAL: "🟢",
+        NodeStatus.BUSY: "🟡",
+        NodeStatus.INTERRUPTED: "🟠",
+        NodeStatus.ERROR: "🔴",
+        NodeStatus.OFFLINE: "⚫",
     }
 
     emoji = status_emoji.get(frame.status, "⚪")
     timestamp_str = frame.timestamp.strftime("%H:%M:%S")
 
     parts = [
-        f"{emoji} `{frame.agent_id}` — **{frame.status.value}** @ {timestamp_str}",
+        f"{emoji} `{frame.node_id}` — **{frame.status.value}** @ {timestamp_str}",
     ]
 
     if frame.metrics:

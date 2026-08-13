@@ -1,20 +1,20 @@
-"""Tests for the AsyncBaseAgent ABC and core data models."""
+"""Tests for the CognitiveNode ABC and core data models."""
 
 from __future__ import annotations
 
 import pytest
 
-from singularity.core.agent_base import (
-    AgentResponse,
-    AgentStatus,
-    AsyncBaseAgent,
-    HeartbeatEvent,
-    InterruptRequest,
+from singularity.neural_core.node_base import (
+    CognitiveOutput,
+    NodeStatus,
+    CognitiveNode,
+    SystemPulse,
+    C2InterventionRequest,
     InterruptResolution,
-    ProposedAction,
-    PromptPayload,
+    ActionProposal,
+    SynapticTransmission,
     RiskLevel,
-    TelemetryFrame,
+    DiagnosticFrame,
 )
 
 
@@ -23,27 +23,27 @@ from singularity.core.agent_base import (
 # ---------------------------------------------------------------------------
 
 class TestPromptPayload:
-    """Tests for the PromptPayload data model."""
+    """Tests for the SynapticTransmission data model."""
 
     def test_creation_with_defaults(self) -> None:
-        """PromptPayload should auto-generate ID and timestamp."""
-        payload = PromptPayload(
-            source_agent_id="agent-a",
-            target_agent_id="agent-b",
+        """SynapticTransmission should auto-generate ID and timestamp."""
+        payload = SynapticTransmission(
+            source_node_id="agent-a",
+            target_node_id="agent-b",
             content="Hello",
         )
         assert payload.payload_id
         assert payload.timestamp is not None
-        assert payload.source_agent_id == "agent-a"
-        assert payload.target_agent_id == "agent-b"
+        assert payload.source_node_id == "agent-a"
+        assert payload.target_node_id == "agent-b"
         assert payload.content == "Hello"
         assert payload.metadata == {}
 
     def test_creation_with_metadata(self) -> None:
-        """PromptPayload should accept arbitrary metadata."""
-        payload = PromptPayload(
-            source_agent_id="a",
-            target_agent_id="b",
+        """SynapticTransmission should accept arbitrary metadata."""
+        payload = SynapticTransmission(
+            source_node_id="a",
+            target_node_id="b",
             content="test",
             metadata={"priority": "high", "retry_count": 3},
         )
@@ -52,34 +52,34 @@ class TestPromptPayload:
 
 
 class TestTelemetryFrame:
-    """Tests for the TelemetryFrame data model."""
+    """Tests for the DiagnosticFrame data model."""
 
     def test_default_status(self) -> None:
-        """TelemetryFrame should default to NOMINAL status."""
-        frame = TelemetryFrame(agent_id="test-001")
-        assert frame.status == AgentStatus.NOMINAL
+        """DiagnosticFrame should default to NOMINAL status."""
+        frame = DiagnosticFrame(node_id="test-001")
+        assert frame.status == NodeStatus.NOMINAL
         assert frame.metrics == {}
         assert frame.message == ""
 
     def test_with_metrics(self) -> None:
-        """TelemetryFrame should store arbitrary float metrics."""
-        frame = TelemetryFrame(
-            agent_id="test-001",
-            status=AgentStatus.BUSY,
+        """DiagnosticFrame should store arbitrary float metrics."""
+        frame = DiagnosticFrame(
+            node_id="test-001",
+            status=NodeStatus.BUSY,
             metrics={"cpu": 45.2, "queue_depth": 3.0},
             message="Processing heavy workload",
         )
         assert frame.metrics["cpu"] == 45.2
-        assert frame.status == AgentStatus.BUSY
+        assert frame.status == NodeStatus.BUSY
 
 
 class TestProposedAction:
-    """Tests for the ProposedAction data model."""
+    """Tests for the ActionProposal data model."""
 
     def test_default_risk_level(self) -> None:
-        """ProposedAction should default to LOW risk."""
-        action = ProposedAction(
-            agent_id="test-001",
+        """ActionProposal should default to LOW risk."""
+        action = ActionProposal(
+            node_id="test-001",
             action_type="read",
             description="Read configuration file",
         )
@@ -88,8 +88,8 @@ class TestProposedAction:
     def test_all_risk_levels(self) -> None:
         """All risk levels should be valid enum values."""
         for level in RiskLevel:
-            action = ProposedAction(
-                agent_id="test",
+            action = ActionProposal(
+                node_id="test",
                 action_type="test",
                 description="test",
                 risk_level=level,
@@ -98,32 +98,32 @@ class TestProposedAction:
 
 
 class TestInterruptRequest:
-    """Tests for the InterruptRequest data model."""
+    """Tests for the C2InterventionRequest data model."""
 
     def test_default_pending(self) -> None:
-        """InterruptRequest should default to PENDING resolution."""
-        action = ProposedAction(
-            agent_id="test",
+        """C2InterventionRequest should default to PENDING resolution."""
+        action = ActionProposal(
+            node_id="test",
             action_type="write",
             description="Write to disk",
             risk_level=RiskLevel.HIGH,
         )
-        interrupt = InterruptRequest(proposed_action=action)
+        interrupt = C2InterventionRequest(proposed_action=action)
         assert interrupt.resolution == InterruptResolution.PENDING
         assert interrupt.resolved_by is None
         assert interrupt.resolved_at is None
 
 
 class TestHeartbeatEvent:
-    """Tests for the HeartbeatEvent data model."""
+    """Tests for the SystemPulse data model."""
 
     def test_creation(self) -> None:
-        """HeartbeatEvent should store sequence number and summary."""
-        event = HeartbeatEvent(
+        """SystemPulse should store sequence number and summary."""
+        event = SystemPulse(
             sequence_number=42,
             constellation_summary={
-                "agent-a": AgentStatus.NOMINAL,
-                "agent-b": AgentStatus.BUSY,
+                "agent-a": NodeStatus.NOMINAL,
+                "agent-b": NodeStatus.BUSY,
             },
         )
         assert event.sequence_number == 42
@@ -131,66 +131,66 @@ class TestHeartbeatEvent:
 
 
 class TestAgentResponse:
-    """Tests for the AgentResponse data model."""
+    """Tests for the CognitiveOutput data model."""
 
     def test_creation(self) -> None:
-        """AgentResponse should aggregate content, telemetry, and actions."""
-        telemetry = TelemetryFrame(agent_id="test")
-        action = ProposedAction(
-            agent_id="test",
+        """CognitiveOutput should aggregate content, telemetry, and actions."""
+        telemetry = DiagnosticFrame(node_id="test")
+        action = ActionProposal(
+            node_id="test",
             action_type="exec",
             description="Run command",
         )
-        response = AgentResponse(
-            agent_id="test",
+        response = CognitiveOutput(
+            node_id="test",
             content="Task completed",
             telemetry=telemetry,
             proposed_actions=[action],
         )
         assert response.content == "Task completed"
         assert len(response.proposed_actions) == 1
-        assert response.telemetry.agent_id == "test"
+        assert response.telemetry.node_id == "test"
 
 
 # ---------------------------------------------------------------------------
-# AsyncBaseAgent ABC tests
+# CognitiveNode ABC tests
 # ---------------------------------------------------------------------------
 
-class TestAsyncBaseAgent:
-    """Tests for the AsyncBaseAgent abstract base class."""
+class TestAsyncBaseNode:
+    """Tests for the CognitiveNode abstract base class."""
 
     def test_cannot_instantiate_abc(self) -> None:
-        """AsyncBaseAgent should not be directly instantiable."""
+        """CognitiveNode should not be directly instantiable."""
         with pytest.raises(TypeError):
-            AsyncBaseAgent(  # type: ignore[abstract]
-                agent_id="test",
-                agent_name="Test",
-                agent_role="Testing",
+            CognitiveNode(  # type: ignore[abstract]
+                node_id="test",
+                node_name="Test",
+                node_role="Testing",
             )
 
     def test_mock_agent_instantiation(self, mock_agent) -> None:
         """A concrete subclass should instantiate correctly."""
-        assert mock_agent.agent_id == "mock-001"
-        assert mock_agent.agent_name == "MockAgent"
-        assert mock_agent.agent_role == "Testing"
+        assert mock_agent.node_id == "mock-001"
+        assert mock_agent.node_name == "MockNode"
+        assert mock_agent.node_role == "Testing"
         assert mock_agent.priority == 99
-        assert mock_agent.status == AgentStatus.INITIALIZING
+        assert mock_agent.status == NodeStatus.INITIALIZING
 
     @pytest.mark.asyncio
     async def test_receive_prompt(self, mock_agent, sample_prompt_payload) -> None:
-        """receive_prompt should return an AgentResponse."""
+        """receive_prompt should return an CognitiveOutput."""
         response = await mock_agent.receive_prompt(sample_prompt_payload)
-        assert isinstance(response, AgentResponse)
+        assert isinstance(response, CognitiveOutput)
         assert "Mock response" in response.content
-        assert response.agent_id == "mock-001"
+        assert response.node_id == "mock-001"
         assert mock_agent._prompt_count == 1
 
     @pytest.mark.asyncio
     async def test_process_heartbeat(self, mock_agent, sample_heartbeat) -> None:
-        """process_heartbeat should return a TelemetryFrame."""
+        """process_heartbeat should return a DiagnosticFrame."""
         frame = await mock_agent.process_heartbeat(sample_heartbeat)
-        assert isinstance(frame, TelemetryFrame)
-        assert frame.agent_id == "mock-001"
+        assert isinstance(frame, DiagnosticFrame)
+        assert frame.node_id == "mock-001"
         assert mock_agent._heartbeat_count == 2
 
     @pytest.mark.asyncio
@@ -220,7 +220,7 @@ class TestAsyncBaseAgent:
                 raise Exception("API error")
                 
         # Trigger compaction (9 -> 10)
-        with patch("singularity.persistence.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+        with patch("singularity.memory_vault.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
             await mock_agent.process_heartbeat(sample_heartbeat)
             
         assert mock_agent._heartbeat_count == 1 # 0 from compaction + 1 from handle_heartbeat
@@ -229,7 +229,7 @@ class TestAsyncBaseAgent:
         # Test error path
         mock_agent._heartbeat_count = 9
         mock_agent._model = ErrorModel()
-        with patch("singularity.persistence.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
+        with patch("singularity.memory_vault.repository.AgentRepository.append_scratchpad_log", new_callable=AsyncMock):
             await mock_agent.process_heartbeat(sample_heartbeat)
         assert mock_agent._heartbeat_count == 1
 
@@ -237,30 +237,30 @@ class TestAsyncBaseAgent:
     async def test_emit_telemetry(self, mock_agent) -> None:
         """emit_telemetry should return current metrics."""
         frame = await mock_agent.emit_telemetry()
-        assert isinstance(frame, TelemetryFrame)
+        assert isinstance(frame, DiagnosticFrame)
         assert frame.metrics["prompts_processed"] == 0.0
 
     @pytest.mark.asyncio
     async def test_request_interrupt(
         self, mock_agent, sample_proposed_action
     ) -> None:
-        """request_interrupt should create an InterruptRequest."""
+        """request_interrupt should create an C2InterventionRequest."""
         interrupt = await mock_agent.request_interrupt(sample_proposed_action)
-        assert isinstance(interrupt, InterruptRequest)
+        assert isinstance(interrupt, C2InterventionRequest)
         assert interrupt.proposed_action == sample_proposed_action
         assert interrupt.resolution == InterruptResolution.PENDING
-        assert interrupt.serialized_state["agent_id"] == "mock-001"
+        assert interrupt.serialized_state["node_id"] == "mock-001"
 
     def test_set_status(self, mock_agent) -> None:
         """set_status should update the agent's status."""
-        mock_agent.set_status(AgentStatus.NOMINAL)
-        assert mock_agent.status == AgentStatus.NOMINAL
-        mock_agent.set_status(AgentStatus.BUSY)
-        assert mock_agent.status == AgentStatus.BUSY
+        mock_agent.set_status(NodeStatus.NOMINAL)
+        assert mock_agent.status == NodeStatus.NOMINAL
+        mock_agent.set_status(NodeStatus.BUSY)
+        assert mock_agent.status == NodeStatus.BUSY
 
     def test_repr(self, mock_agent) -> None:
         """__repr__ should include key agent attributes."""
         repr_str = repr(mock_agent)
-        assert "MockAgent" in repr_str
+        assert "MockNode" in repr_str
         assert "mock-001" in repr_str
         assert "99" in repr_str

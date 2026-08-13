@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 cl_mock = MagicMock()
 sys.modules['chainlit'] = cl_mock
 
-from singularity.core.agent_base import (
-    AgentStatus,
-    AsyncBaseAgent,
-    InterruptRequest,
-    ProposedAction,
+from singularity.neural_core.node_base import (
+    NodeStatus,
+    CognitiveNode,
+    C2InterventionRequest,
+    ActionProposal,
     RiskLevel,
 )
 from singularity.ground_control.components import (
@@ -20,15 +20,15 @@ from singularity.ground_control.components import (
 )
 
 def test_build_sync_prompt_card():
-    action = ProposedAction(
+    action = ActionProposal(
         action_id="act-123",
         action_type="db_write",
-        agent_id="test-agent",
+        node_id="test-agent",
         description="Write some data",
         risk_level=RiskLevel.MEDIUM,
         parameters={"foo": "bar"}
     )
-    interrupt = InterruptRequest(proposed_action=action)
+    interrupt = C2InterventionRequest(proposed_action=action)
     
     msg = build_sync_prompt_card(interrupt)
     
@@ -46,29 +46,29 @@ def test_build_sync_prompt_card():
     
     # test without parameters
     action.parameters = None
-    msg = build_sync_prompt_card(InterruptRequest(proposed_action=action))
+    msg = build_sync_prompt_card(C2InterventionRequest(proposed_action=action))
     assert "foo" not in cl_mock.Message.call_args[1]["content"]
     cl_mock.Message.reset_mock()
     
     # test unknown risk (fallback)
     action.risk_level = MagicMock() # not a RiskLevel enum
     action.risk_level.value = "unknown"
-    msg = build_sync_prompt_card(InterruptRequest(proposed_action=action))
+    msg = build_sync_prompt_card(C2InterventionRequest(proposed_action=action))
     assert "UNKNOWN" in cl_mock.Message.call_args[1]["content"]
 
 def test_build_constellation_overview():
     agent1 = MagicMock()
-    agent1.status = AgentStatus.NOMINAL
-    agent1.agent_name = "Agent 1"
-    agent1.agent_id = "a1"
-    agent1.agent_role = "role1"
+    agent1.status = NodeStatus.NOMINAL
+    agent1.node_name = "Agent 1"
+    agent1.node_id = "a1"
+    agent1.node_role = "role1"
     agent1.priority = 1
     
     agent2 = MagicMock()
-    agent2.status = AgentStatus.ERROR
-    agent2.agent_name = "Agent 2"
-    agent2.agent_id = "a2"
-    agent2.agent_role = "role2"
+    agent2.status = NodeStatus.ERROR
+    agent2.node_name = "Agent 2"
+    agent2.node_id = "a2"
+    agent2.node_role = "role2"
     agent2.priority = 2
     
     agent3 = MagicMock()

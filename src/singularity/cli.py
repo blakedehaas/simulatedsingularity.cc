@@ -130,23 +130,23 @@ TOTAL                                           653      0   100%
             <ol>
                 <li><strong>Ground Control (C2):</strong> A Chainlit UI providing the human-in-the-loop dashboard.</li>
                 <li><strong>Orchestration Plane (LangGraph):</strong> The state machine enforcing priority-based routing and interrupt checkpoints.</li>
-                <li><strong>Orbital Nodes (Agents):</strong> Independent asynchronous actors subclassing <code>AsyncBaseAgent</code>.</li>
+                <li><strong>Orbital Nodes (Agents):</strong> Independent asynchronous actors subclassing <code>CognitiveNode</code>.</li>
             </ol>
             
-            <h3>The AsyncBaseAgent Interface</h3>
+            <h3>The CognitiveNode Interface</h3>
             <p>All functional agents extend this abstract base class. Custom agents must define their behavior by implementing three asynchronous methods:</p>
-            <pre><code>class CustomAgent(AsyncBaseAgent):
+            <pre><code>class CustomNode(CognitiveNode):
     AGENT_ID = "custom-001"
     
-    async def process_task(self, task: AgentTask) -> AgentResponse:
+    async def process_task(self, task: AgentTask) -> CognitiveOutput:
         # Business logic for asynchronous background jobs
         pass
         
-    async def process_heartbeat(self, event: HeartbeatEvent) -> TelemetryFrame:
+    async def process_heartbeat(self, event: SystemPulse) -> DiagnosticFrame:
         # Periodic health check reporting
         pass
         
-    async def receive_prompt(self, payload: PromptPayload) -> AgentResponse:
+    async def receive_prompt(self, payload: SynapticTransmission) -> CognitiveOutput:
         # Handling direct messages routed from the C2 Dashboard
         pass</code></pre>
         </div>
@@ -262,8 +262,8 @@ def run_interactive(verbose: bool = False) -> None:
 def run_autonomous() -> None:
     """Run the headless LangGraph orchestration loop."""
     logger.info("Starting autonomous mode...")
-    from singularity.core.agent_registry import initialize_constellation
-    from singularity.orchestration.graph import build_graph
+    from singularity.neural_core.node_registry import initialize_constellation
+    from singularity.swarm_orchestration.graph import build_graph
     
     # Initialize agents
     initialize_constellation()
@@ -281,7 +281,7 @@ def run_autonomous() -> None:
 def run_sandbox() -> None:
     """Run the system with an in-memory database and restricted permissions."""
     logger.info("Starting sandbox mode...")
-    # Typically this would override settings in singularity.persistence.database
+    # Typically this would override settings in singularity.memory_vault.database
     os.environ["SINGULARITY_DB_PATH"] = ":memory:"
     os.environ["SINGULARITY_SANDBOX"] = "1"
     

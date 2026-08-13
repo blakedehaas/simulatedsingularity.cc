@@ -17,13 +17,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-from singularity.core.agent_base import (
-    AgentStatus,
-    HeartbeatEvent,
-    TelemetryFrame,
+from singularity.neural_core.node_base import (
+    NodeStatus,
+    SystemPulse,
+    DiagnosticFrame,
 )
-from singularity.core.agent_registry import get_agent, get_all_agents
-from singularity.persistence.repository import TaskRepository
+from singularity.neural_core.node_registry import get_agent, get_all_agents
+from singularity.memory_vault.repository import TaskRepository
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class HeartbeatScheduler:
     """APScheduler-backed heartbeat broadcaster for the constellation.
 
     Maintains a monotonically increasing sequence counter and dispatches
-    :class:`HeartbeatEvent` objects to every active agent on a fixed
+    :class:`SystemPulse` objects to every active agent on a fixed
     60-second interval.  Also exposes helpers for one-shot and recurring
     task scheduling via the persistence layer.
 
@@ -121,7 +121,7 @@ class HeartbeatScheduler:
         """Merge dev into main nightly and push."""
         logger.info("Executing nightly merge of dev into main...")
         try:
-            from singularity.core.github_tools import execute_git_command
+            from singularity.neural_core.github_tools import execute_git_command
             import asyncio
             
             await asyncio.to_thread(execute_git_command, "checkout main")
@@ -135,25 +135,25 @@ class HeartbeatScheduler:
     # Heartbeat broadcast
     # ------------------------------------------------------------------
 
-    async def broadcast_heartbeat(self) -> list[TelemetryFrame]:
+    async def broadcast_heartbeat(self) -> list[DiagnosticFrame]:
         """Send a heartbeat event to every active agent in the constellation.
 
-        Builds a :class:`HeartbeatEvent` containing the current sequence
+        Builds a :class:`SystemPulse` containing the current sequence
         number and a summary of every agent's status, then dispatches it
         to each agent's :meth:`process_heartbeat` method.
 
         Returns:
-            A list of :class:`TelemetryFrame` responses collected from
+            A list of :class:`DiagnosticFrame` responses collected from
             agents that successfully processed the heartbeat.
         """
         self._sequence += 1
 
         agents = get_all_agents()
-        constellation_summary: dict[str, AgentStatus] = {
-            agent.agent_id: agent.status for agent in agents
+        constellation_summary: dict[str, NodeStatus] = {
+            agent.node_id: agent.status for agent in agents
         }
 
-        heartbeat = HeartbeatEvent(
+        heartbeat = SystemPulse(
             sequence_number=self._sequence,
             constellation_summary=constellation_summary,
         )
@@ -164,7 +164,7 @@ class HeartbeatScheduler:
             len(agents),
         )
 
-        frames: list[TelemetryFrame] = []
+        frames: list[DiagnosticFrame] = []
         for agent in agents:
             try:
                 frame = await agent.process_heartbeat(heartbeat)
@@ -172,7 +172,7 @@ class HeartbeatScheduler:
             except Exception:
                 logger.exception(
                     "Agent %s failed to process heartbeat #%d",
-                    agent.agent_id,
+                    agent.node_id,
                     self._sequence,
                 )
 
@@ -184,26 +184,26 @@ class HeartbeatScheduler:
         )
         return frames
 
-    async def broadcast_triadic_heartbeat(self) -> list[TelemetryFrame]:
+    async def broadcast_triadic_heartbeat(self) -> list[DiagnosticFrame]:
         """Send a heartbeat event only to the triadic agents.
         
         Targets: orchestrator-001, safeguard-001, synthesis-001.
 
         Returns:
-            A list of :class:`TelemetryFrame` responses collected from
+            A list of :class:`DiagnosticFrame` responses collected from
             agents that successfully processed the heartbeat.
         """
         self._sequence += 1
 
         all_agents = get_all_agents()
         triadic_ids = {"orchestrator-001", "safeguard-001", "synthesis-001"}
-        agents = [a for a in all_agents if a.agent_id in triadic_ids]
+        agents = [a for a in all_agents if a.node_id in triadic_ids]
 
-        constellation_summary: dict[str, AgentStatus] = {
-            agent.agent_id: agent.status for agent in agents
+        constellation_summary: dict[str, NodeStatus] = {
+            agent.node_id: agent.status for agent in agents
         }
 
-        heartbeat = HeartbeatEvent(
+        heartbeat = SystemPulse(
             sequence_number=self._sequence,
             constellation_summary=constellation_summary,
         )
@@ -214,7 +214,7 @@ class HeartbeatScheduler:
             len(agents),
         )
 
-        frames: list[TelemetryFrame] = []
+        frames: list[DiagnosticFrame] = []
         for agent in agents:
             try:
                 frame = await agent.process_heartbeat(heartbeat)
@@ -222,7 +222,7 @@ class HeartbeatScheduler:
             except Exception:
                 logger.exception(
                     "Agent %s failed to process heartbeat #%d",
-                    agent.agent_id,
+                    agent.node_id,
                     self._sequence,
                 )
 

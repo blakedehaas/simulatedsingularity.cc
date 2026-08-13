@@ -24,18 +24,18 @@ from chainlit.server import app as chainlit_app
 from chainlit.input_widget import Select, Switch
 from chainlit import Action, Message
 
-from singularity.core.agent_base import (
-    AgentStatus,
-    HeartbeatEvent,
-    PromptPayload,
-    TelemetryFrame,
+from singularity.neural_core.node_base import (
+    NodeStatus,
+    SystemPulse,
+    SynapticTransmission,
+    DiagnosticFrame,
 )
-from singularity.core.agent_registry import (
+from singularity.neural_core.node_registry import (
     get_agent,
     get_all_agents,
     initialize_constellation,
 )
-import singularity.agents  # Trigger @register_agent decorators
+import singularity.cognitive_nodes  # Trigger @register_agent decorators
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env variables (e.g. GOOGLE_API_KEY)
@@ -52,9 +52,9 @@ from singularity.ground_control.handlers import (
     handle_sync_prompt_response,
     handle_user_prompt,
 )
-from singularity.persistence.database import close_database, init_database
-from singularity.telemetry.collector import TelemetryCollector
-from singularity.telemetry.events import (
+from singularity.memory_vault.database import close_database, init_database
+from singularity.sensorium.collector import TelemetryCollector
+from singularity.sensorium.events import (
     TelemetryEvent,
     TelemetryEventBus,
     TelemetryEventType,
@@ -178,7 +178,7 @@ async def _on_telemetry_event(event: TelemetryEvent) -> None:
     emoji = emoji_map.get(event.event_type, "📊")
     content = (
         f"{emoji} **{event.event_type.value.upper()}** — "
-        f"`{event.source_agent_id}` at "
+        f"`{event.source_node_id}` at "
         f"`{event.timestamp.strftime('%H:%M:%S UTC')}`"
     )
 
@@ -193,8 +193,8 @@ async def _on_telemetry_event(event: TelemetryEvent) -> None:
     # Broadcast JSON to Sensorium Dashboards
     if active_websockets:
         ws_payload = {
-            "source": "ground_control" if event.source_agent_id == "ground_control" else event.source_agent_id,
-            "targetAgent": event.source_agent_id,
+            "source": "ground_control" if event.source_node_id == "ground_control" else event.source_node_id,
+            "targetAgent": event.source_node_id,
             "timestamp": event.timestamp.isoformat(),
             "executionTokens": 0,
             "status": "COMPLETED",
@@ -296,7 +296,7 @@ async def on_chat_start() -> None:
         await Message(content=overview, author="Ground Control").send()
 
         # Setup Chat Settings for Agent Routing and Tools
-        agent_options = [agent.agent_id for agent in agents]
+        agent_options = [agent.node_id for agent in agents]
         settings = await cl.ChatSettings(
             [
                 Select(
@@ -321,7 +321,7 @@ async def on_chat_start() -> None:
                 )
             ]
         ).send()
-        cl.user_session.set("target_agent_id", agent_options[0])
+        cl.user_session.set("target_node_id", agent_options[0])
 
     logger.info("Ground Control session ready")
 
@@ -337,8 +337,8 @@ async def setup_agent(settings):
         await on_trigger_heartbeat(None)
     
     target_id = settings.get("target_agent")
-    if target_id and target_id != cl.user_session.get("target_agent_id"):
-        cl.user_session.set("target_agent_id", target_id)
+    if target_id and target_id != cl.user_session.get("target_node_id"):
+        cl.user_session.set("target_node_id", target_id)
         logger.info("Target agent set to %s", target_id)
 
 
@@ -346,7 +346,7 @@ async def setup_agent(settings):
 async def on_message(message: cl.Message) -> None:
     """Route an operator message through the orchestration pipeline.
 
-    Wraps the operator's input as a :class:`PromptPayload`, invokes
+    Wraps the operator's input as a :class:`SynapticTransmission`, invokes
     :func:`handle_user_prompt`, and displays the formatted response.
 
     Args:
@@ -375,9 +375,9 @@ async def on_message(message: cl.Message) -> None:
         # If there are proposed actions requiring approval, show sync prompts
         if response and response.proposed_actions:
             for action in response.proposed_actions:
-                from singularity.core.agent_base import InterruptRequest
+                from singularity.neural_core.node_base import C2InterventionRequest
 
-                interrupt = InterruptRequest(proposed_action=action)
+                interrupt = C2InterventionRequest(proposed_action=action)
                 card = build_sync_prompt_card(interrupt)
                 await card.send()
 
@@ -453,7 +453,7 @@ async def on_approve_action(action: Action) -> None:
         if bus is not None:
             await bus.publish(TelemetryEvent(
                 event_type=TelemetryEventType.INTERRUPT_RESOLVED,
-                source_agent_id="ground_control",
+                source_node_id="ground_control",
                 data={"action_id": action_id, "resolution": "approved"},
             ))
     except Exception:
@@ -495,7 +495,7 @@ async def on_deny_action(action: Action) -> None:
         if bus is not None:
             await bus.publish(TelemetryEvent(
                 event_type=TelemetryEventType.INTERRUPT_RESOLVED,
-                source_agent_id="ground_control",
+                source_node_id="ground_control",
                 data={"action_id": action_id, "resolution": "denied"},
             ))
     except Exception:
@@ -537,7 +537,7 @@ async def on_trigger_heartbeat(action: Action) -> None:
         if bus is not None:
             await bus.publish(TelemetryEvent(
                 event_type=TelemetryEventType.HEARTBEAT,
-                source_agent_id="ground_control",
+                source_node_id="ground_control",
                 data=heartbeat_result,
             ))
     except Exception:

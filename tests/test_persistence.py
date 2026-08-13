@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from singularity.persistence.database import get_session, init_database, close_database
-from singularity.persistence.models import (
+from singularity.memory_vault.database import get_session, init_database, close_database
+from singularity.memory_vault.models import (
     AgentMemoryRecord,
     AgentProfileRecord,
     CommunicationLogRecord,
@@ -17,7 +17,7 @@ from singularity.persistence.models import (
     ScheduledTaskRecord,
     SyncPromptRecord,
 )
-from singularity.persistence.repository import (
+from singularity.memory_vault.repository import (
     AgentRepository,
     LogRepository,
     StateRepository,
@@ -44,8 +44,8 @@ class TestDatabaseEngine:
         """Session should auto-commit on clean exit."""
         async with get_session() as session:
             record = AgentProfileRecord(
-                agent_id="test-agent",
-                name="TestAgent",
+                node_id="test-agent",
+                name="TestNode",
                 role="Testing",
             )
             session.add(record)
@@ -54,7 +54,7 @@ class TestDatabaseEngine:
         async with get_session() as session:
             result = await session.get(AgentProfileRecord, "test-agent")
             assert result is not None
-            assert result.name == "TestAgent"
+            assert result.name == "TestNode"
 
     @pytest.mark.asyncio
     async def test_session_rollback_on_error(self, initialized_db: Path) -> None:
@@ -62,8 +62,8 @@ class TestDatabaseEngine:
         try:
             async with get_session() as session:
                 record = AgentProfileRecord(
-                    agent_id="rollback-test",
-                    name="RollbackAgent",
+                    node_id="rollback-test",
+                    name="RollbackNode",
                     role="Testing",
                 )
                 session.add(record)
@@ -96,26 +96,26 @@ class TestAgentRepository:
     async def test_upsert_creates_profile(self, initialized_db: Path) -> None:
         """upsert_profile should create a new profile."""
         record = await AgentRepository.upsert_profile(
-            agent_id="sec-001",
-            name="SecurityAgent",
+            node_id="sec-001",
+            name="FirewallNode",
             role="Apex Admin",
             system_prompt="You are the security agent.",
             priority=0,
         )
-        assert record.agent_id == "sec-001"
-        assert record.name == "SecurityAgent"
+        assert record.node_id == "sec-001"
+        assert record.name == "FirewallNode"
         assert record.priority == 0
 
     @pytest.mark.asyncio
     async def test_upsert_updates_existing(self, initialized_db: Path) -> None:
         """upsert_profile should update an existing profile."""
         await AgentRepository.upsert_profile(
-            agent_id="sec-001",
-            name="SecurityAgent",
+            node_id="sec-001",
+            name="FirewallNode",
             role="Apex Admin",
         )
         updated = await AgentRepository.upsert_profile(
-            agent_id="sec-001",
+            node_id="sec-001",
             name="SecurityAgentV2",
             role="Apex Admin Enhanced",
         )
@@ -125,11 +125,11 @@ class TestAgentRepository:
     async def test_get_profile(self, initialized_db: Path) -> None:
         """get_profile should retrieve by ID."""
         await AgentRepository.upsert_profile(
-            agent_id="core-001", name="CoreAgent", role="Operator"
+            node_id="core-001", name="NexusNode", role="Operator"
         )
         profile = await AgentRepository.get_profile("core-001")
         assert profile is not None
-        assert profile.name == "CoreAgent"
+        assert profile.name == "NexusNode"
 
     @pytest.mark.asyncio
     async def test_get_profile_not_found(self, initialized_db: Path) -> None:

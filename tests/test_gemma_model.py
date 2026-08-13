@@ -2,13 +2,13 @@ import pytest
 import datetime
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from singularity.core.models import GemmaChatModel
+from singularity.neural_core.models import GemmaChatModel
 
 class TestGemmaChatModel:
     @pytest.mark.asyncio
     async def test_generate_mock(self):
         """Test the mocked generate method for Gemma model."""
-        model = GemmaChatModel(agent_role="core", model_name="gemma-2b")
+        model = GemmaChatModel(node_role="core", model_name="gemma-2b")
         
         # We need to mock the API call so it returns '[timestamp] mock'
         mock_response = MagicMock()
@@ -25,7 +25,7 @@ class TestGemmaChatModel:
 
     def test_generate_sync_mock(self):
         """Test the mocked synchronous generate method for Gemma model."""
-        model = GemmaChatModel(agent_role="core", model_name="gemma-2b")
+        model = GemmaChatModel(node_role="core", model_name="gemma-2b")
         
         mock_response = MagicMock()
         mock_response.content = f"[{datetime.datetime.now().isoformat()}] mock"
