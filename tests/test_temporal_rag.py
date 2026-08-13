@@ -51,7 +51,7 @@ def test_temporal_agent_cutoff_calculation():
     assert agent_40.memory_filter["cutoff_year"] == 2030
 
 @pytest.mark.asyncio
-@patch('singularity.temporal.temporal_rag.genai.Client')
+@patch('google.genai.Client')
 async def test_simulate_dialectic(mock_client_cls):
     """TRACE-TRAG-004: Test simulation of a dialectic conversation between two agents."""
     logger.debug("Testing simulate_dialectic")
