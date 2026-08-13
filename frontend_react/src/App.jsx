@@ -40,12 +40,12 @@ function App() {
         {/* Navigation Bar */}
         <nav className="glass-panel sticky top-0 z-50 flex items-center justify-between px-6 py-2 border-b border-gray-800">
           <div className="flex space-x-2">
-            <NavLink to="/" className={navItemClass}>[TERMINAL]</NavLink>
+            <NavLink to="/" className={navItemClass}>[SWARM SIMULATION]</NavLink>
+            <NavLink to="/terminal" className={navItemClass}>[TERMINAL]</NavLink>
             <NavLink to="/temporal" className={navItemClass}>[TEMPORAL RAG]</NavLink>
             <NavLink to="/media" className={navItemClass}>[MEDIA SYNTH]</NavLink>
             <NavLink to="/audio" className={navItemClass}>[AUDIO DAW]</NavLink>
             <NavLink to="/vr" className={navItemClass}>[WEBXR SANDBOX]</NavLink>
-            <NavLink to="/language-sim" className={navItemClass}>[LANGUAGE SIMULATION]</NavLink>
             <NavLink to="/library" className={navItemClass}>[LIBRARY]</NavLink>
             <NavLink to="/store" className={navItemClass}>[STORE]</NavLink>
           </div>
@@ -79,12 +79,12 @@ function App() {
         {/* Main Content Area */}
         <main className="flex-1 p-6 overflow-hidden flex flex-col">
           <Routes>
-            <Route path="/" element={<C2Terminal />} />
+            <Route path="/" element={<LanguageSimulation />} />
+            <Route path="/terminal" element={<C2Terminal />} />
             <Route path="/temporal" element={<TemporalFork />} />
             <Route path="/media" element={<MediaEngine />} />
             <Route path="/audio" element={<AudioDAW />} />
             <Route path="/vr" element={<Sandbox />} />
-            <Route path="/language-sim" element={<LanguageSimulation />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/store" element={<Monetization />} />
           </Routes>
