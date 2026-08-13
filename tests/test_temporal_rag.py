@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 
 from singularity.temporal.temporal_rag import (
@@ -51,9 +51,16 @@ def test_temporal_agent_cutoff_calculation():
     assert agent_40.memory_filter["cutoff_year"] == 2030
 
 @pytest.mark.asyncio
-async def test_simulate_dialectic():
+@patch('singularity.temporal.temporal_rag.genai.Client')
+async def test_simulate_dialectic(mock_client_cls):
     """TRACE-TRAG-004: Test simulation of a dialectic conversation between two agents."""
     logger.debug("Testing simulate_dialectic")
+    
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.text = "[Age 20]: Hello\n[Age 40]: Hi\n[Age 20]: How are you?\n[Age 40]: Good"
+    mock_client.models.generate_content.return_value = mock_response
     
     agent_a = instantiate_temporal_agent(20, 2000)
     agent_b = instantiate_temporal_agent(40, 1980)
