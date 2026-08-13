@@ -1,12 +1,11 @@
 """
 test_api_app.py — FastAPI endpoint tests for the Simulated Singularity C2 API.
 
-Uses FastAPI TestClient to validate all REST endpoints
-across telemetry, console, economy, media, audio, and VR modules.
+Uses FastAPI TestClient to validate REST endpoints
+across the health, sensorium, and simulation modules.
 """
 
 import logging
-import pytest
 
 logger = logging.getLogger(__name__)
 
