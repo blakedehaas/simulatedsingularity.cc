@@ -70,6 +70,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Copy compose file to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: "deployment/podman-compose.yml"
+          target: "/home/${{ secrets.PROD_USER }}/"
+
       - name: Execute deployment commands via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -77,6 +86,9 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
-            cd /opt/simulated_singularity_cc
-            bash deployment/backup_chronos.sh
-            bash deployment/deploy_node.sh
+            echo "[SYS.LOG] Pulling latest images..."
+            podman-compose -f /home/${{ secrets.PROD_USER }}/deployment/podman-compose.yml pull
+            echo "[SYS.LOG] Starting services..."
+            podman-compose -f /home/${{ secrets.PROD_USER }}/deployment/podman-compose.yml up -d --remove-orphans
+            echo "[SYS.LOG] Cleaning up unused images..."
+            podman image prune -a -f
