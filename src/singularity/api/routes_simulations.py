@@ -28,6 +28,7 @@ class LanguageSpawnRequest(BaseModel):
     seed_prompt: str
     end_state_condition: str
     agents_config: list[dict[str, Any]]
+    verbose_mode: bool = False
 
 # Mock database for the API layer (kept for backward compatibility with older code if any)
 _mock_simulations_db: dict[str, dict[str, Any]] = {}
@@ -157,7 +158,8 @@ async def spawn_language_simulation(request: LanguageSpawnRequest) -> dict[str, 
             session_id=sim_id,
             seed_prompt=request.seed_prompt,
             end_state_condition=request.end_state_condition,
-            agents_config=request.agents_config
+            agents_config=request.agents_config,
+            verbose_mode=request.verbose_mode
         )
         
         db.add(session)

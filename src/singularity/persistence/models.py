@@ -346,6 +346,7 @@ class LanguageSimulationConfig(Base):
     seed_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     end_state_condition: Mapped[str] = mapped_column(Text, nullable=False)
     agents_config: Mapped[dict] = mapped_column(JSON, nullable=False)
+    verbose_mode: Mapped[bool] = mapped_column(default=False)
 
     # Relationships
     session: Mapped[SimulationSession] = relationship(back_populates="language_config")

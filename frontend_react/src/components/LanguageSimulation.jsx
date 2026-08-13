@@ -2,7 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const LanguageSimulation = () => {
-  const [seedPrompt, setSeedPrompt] = useState('');
+  const [seedText, setSeedText] = useState('');
+  const [seedArtifacts, setSeedArtifacts] = useState([]);
+  const [verboseMode, setVerboseMode] = useState(false);
+  
   const [endStateCondition, setEndStateCondition] = useState('');
   const [agents, setAgents] = useState([{ name: '', system_prompt: '' }]);
   const [simId, setSimId] = useState(null);
@@ -27,7 +30,6 @@ const LanguageSimulation = () => {
       intervalId = setInterval(async () => {
         try {
           const res = await axios.get(`/api/simulations/${simId}/messages`);
-          // Ensure messages is an array
           const newMessages = Array.isArray(res.data) ? res.data : (res.data.messages || []);
           setMessages(newMessages);
         } catch (err) {
@@ -55,17 +57,47 @@ const LanguageSimulation = () => {
     setAgents(newAgents);
   };
 
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target.result;
+        const base64Data = result.split(',')[1];
+        setSeedArtifacts(prev => [...prev, {
+          name: file.name,
+          mimeType: file.type,
+          data: base64Data,
+          dataUrl: result
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const handleRemoveArtifact = (index) => {
+    setSeedArtifacts(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSpawn = async () => {
     setIsSpawning(true);
     setError('');
     try {
+      const finalSeedPrompt = [
+        { text: seedText },
+        ...seedArtifacts.map(a => ({ inlineData: { mimeType: a.mimeType, data: a.data } }))
+      ];
+
       const payload = {
-        seed_prompt: seedPrompt,
+        seed_prompt: JSON.stringify(finalSeedPrompt),
         end_state_condition: endStateCondition,
-        agents: agents.filter(a => a.name.trim() !== '' && a.system_prompt.trim() !== '')
+        agents_config: agents.filter(a => a.name.trim() !== '' && a.system_prompt.trim() !== ''),
+        verbose_mode: verboseMode
       };
+      
       const res = await axios.post('/api/simulations/language/spawn', payload);
-      // Fallback depending on backend structure
       const newSimId = res.data?.sim_id || res.data?.id || res.data;
       if (typeof newSimId === 'string' || typeof newSimId === 'number') {
         setSimId(newSimId);
@@ -92,11 +124,49 @@ const LanguageSimulation = () => {
     }
   };
 
+  const renderContent = (contentString) => {
+    try {
+      const parts = JSON.parse(contentString);
+      if (Array.isArray(parts)) {
+        return (
+          <div className="flex flex-col gap-2">
+            {parts.map((p, i) => {
+              if (p.text) return <span key={i} className="whitespace-pre-wrap">{p.text}</span>;
+              if (p.inlineData) {
+                if (p.inlineData.mimeType.startsWith('image/')) {
+                  return <img key={i} src={`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`} className="max-w-xs rounded border border-gray-700" alt="Artifact" />;
+                }
+                if (p.inlineData.mimeType.startsWith('audio/')) {
+                  return <audio key={i} controls src={`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`} className="w-full max-w-xs" />;
+                }
+              }
+              return null;
+            })}
+          </div>
+        );
+      }
+    } catch (e) {
+      // not JSON
+    }
+    return <div className="whitespace-pre-wrap">{contentString}</div>;
+  };
+
   return (
     <div className="flex flex-col h-full font-mono text-gray-300">
-      <h1 className="text-2xl text-cyan-400 mb-6 text-glow-cyan uppercase tracking-wider border-b border-gray-800 pb-2">
-        Language Simulation Matrix
-      </h1>
+      <div className="flex justify-between items-end border-b border-gray-800 pb-2 mb-6">
+        <h1 className="text-2xl text-cyan-400 text-glow-cyan uppercase tracking-wider">
+          Language Simulation Matrix
+        </h1>
+        
+        <label className="flex items-center gap-2 cursor-pointer group">
+          <span className="text-xs uppercase text-gray-400 group-hover:text-cyan-400 transition-colors">Verbose Mode</span>
+          <div className="relative">
+            <input type="checkbox" checked={verboseMode} onChange={(e) => setVerboseMode(e.target.checked)} className="sr-only" />
+            <div className={`block w-10 h-6 rounded-full transition-colors ${verboseMode ? 'bg-cyan-600' : 'bg-gray-800 border border-gray-700'}`}></div>
+            <div className={`dot absolute left-1 top-1 bg-cyan-400 w-4 h-4 rounded-full transition-transform ${verboseMode ? 'transform translate-x-4 bg-white' : ''}`}></div>
+          </div>
+        </label>
+      </div>
       
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
         
@@ -107,14 +177,37 @@ const LanguageSimulation = () => {
           <div className="flex flex-col gap-2">
             <label className="text-xs uppercase text-gray-500">Seed Prompt</label>
             <textarea 
-              value={seedPrompt}
-              onChange={(e) => setSeedPrompt(e.target.value)}
+              value={seedText}
+              onChange={(e) => setSeedText(e.target.value)}
               className="bg-black/50 border border-gray-700 rounded p-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors h-24 resize-none"
               placeholder="Initial context or prompt to kickstart the simulation..."
             />
+            
+            <div className="flex items-center gap-4 mt-2">
+              <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 text-xs px-3 py-1.5 rounded transition-colors uppercase">
+                + Attach Artifacts
+                <input type="file" multiple accept="image/*,audio/*" className="hidden" onChange={handleFileUpload} />
+              </label>
+            </div>
+            
+            {seedArtifacts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2 p-2 bg-black/30 border border-gray-800 rounded">
+                {seedArtifacts.map((artifact, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-gray-900 p-1 pr-2 rounded border border-gray-700">
+                    {artifact.mimeType.startsWith('image/') ? (
+                      <img src={artifact.dataUrl} className="w-8 h-8 object-cover rounded" />
+                    ) : (
+                      <div className="w-8 h-8 flex items-center justify-center bg-gray-800 rounded text-xs">🔊</div>
+                    )}
+                    <span className="text-xs max-w-[100px] truncate">{artifact.name}</span>
+                    <button onClick={() => handleRemoveArtifact(i)} className="text-red-500 hover:text-red-400 ml-1">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 mt-2">
             <label className="text-xs uppercase text-gray-500">End State Condition</label>
             <textarea 
               value={endStateCondition}
@@ -214,8 +307,8 @@ const LanguageSimulation = () => {
               messages.map((msg, idx) => (
                 <div key={idx} className="flex flex-col">
                   <div className="text-xs text-purple-400 mb-1">[{msg.agent || msg.sender || 'System'}]</div>
-                  <div className="bg-gray-900/60 p-3 rounded border border-gray-800 text-sm whitespace-pre-wrap">
-                    {msg.content || msg.text || msg.message}
+                  <div className="bg-gray-900/60 p-3 rounded border border-gray-800 text-sm">
+                    {renderContent(msg.content || msg.text || msg.message)}
                   </div>
                 </div>
               ))
