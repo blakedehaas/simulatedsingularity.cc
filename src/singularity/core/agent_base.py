@@ -226,6 +226,7 @@ class AsyncBaseAgent(ABC):
         agent_name: str,
         agent_role: str,
         priority: int = 10,
+        reflective_tools: list[Any] | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.agent_name = agent_name
@@ -235,6 +236,18 @@ class AsyncBaseAgent(ABC):
         self._created_at = _utc_now()
         self._scratchpad: list[str] = []
         self._heartbeat_count: int = 0
+        
+        from singularity.core.models import GemmaChatModel
+        self._reflective_model = GemmaChatModel(
+            agent_role=f"{agent_role}_reflective",
+            system_prompt=(
+                f"You are the internal reflective cognitive layer for {agent_name} ({agent_id}). "
+                "Before your operational layer decides how to respond externally, you must analyze the situation, "
+                "formulate a plan, and use any available tools to gather necessary context. "
+                "Your output will be kept private in your internal scratchpad."
+            ),
+            tools=reflective_tools
+        )
 
     # ------------------------------------------------------------------
     # Core abstract methods — must be implemented by every agent
@@ -248,11 +261,35 @@ class AsyncBaseAgent(ABC):
         self._scratchpad.append(entry)
         await AgentRepository.append_scratchpad_log(self.agent_id, entry)
 
+        # ------------------------------------------------------------------
+        # Reflective Phase
+        # ------------------------------------------------------------------
+        reflection_prompt = f"Analyze this incoming prompt and gather context using tools if necessary:\n{payload.content}"
+        original_reflective_prompt = self._reflective_model.system_prompt
+        context_str = "\n".join(self._scratchpad)
+        
+        self._reflective_model.system_prompt = f"{original_reflective_prompt}\n\n[Agent Scratchpad Context]:\n{context_str}"
+        
+        try:
+            reflection = await self._reflective_model.generate(reflection_prompt)
+        except Exception as e:
+            reflection = f"Reflection generation failed: {e}"
+        finally:
+            self._reflective_model.system_prompt = original_reflective_prompt
+            
+        reflection_entry = f"[INTERNAL REFLECTION]: {reflection}"
+        self._scratchpad.append(reflection_entry)
+        await AgentRepository.append_scratchpad_log(self.agent_id, reflection_entry)
+
+        # ------------------------------------------------------------------
+        # Operational Phase
+        # ------------------------------------------------------------------
         # Inject scratchpad into model's system prompt temporarily if possible
         model = getattr(self, "_model", None)
         original_prompt = None
         if model and hasattr(model, "system_prompt"):
             original_prompt = model.system_prompt
+            # Update context_str to include the reflection we just added
             context_str = "\n".join(self._scratchpad)
             
             oversight_prompt = ""
