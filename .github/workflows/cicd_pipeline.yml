@@ -77,16 +77,17 @@ jobs:
           SSH_HOST: ${{ secrets.PROD_HOST }}
         run: |
           mkdir -p ~/.ssh
-          if echo "$SSH_KEY" | grep -q "BEGIN"; then
-            echo "[SYS.LOG] Detected raw private key format. Formatting with trailing newline..."
-            echo "$SSH_KEY" > ~/.ssh/deploy_key
-            echo "" >> ~/.ssh/deploy_key
-          else
-            echo "[SYS.LOG] Detected base64 encoded key format. Decoding..."
-            echo "$SSH_KEY" | tr -d '\n\r ' | base64 -d > ~/.ssh/deploy_key
-          fi
+          
+          # Use EOF to inject the raw multi-line secret exactly as provided
+          cat << 'EOF' > ~/.ssh/deploy_key
+          ${{ secrets.PROD_SSH_KEY }}
+          EOF
+          
+          # Ensure trailing newline exists just in case
+          echo "" >> ~/.ssh/deploy_key
+          
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
           
           echo "[SYS.LOG] Copying compose file to server..."
           scp -i ~/.ssh/deploy_key deployment/podman-compose.yml $SSH_USER@$SSH_HOST:/home/$SSH_USER/
