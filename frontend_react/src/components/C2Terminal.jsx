@@ -23,6 +23,7 @@ const C2Terminal = () => {
 
 
   const getAgentColor = (agent) => {
+    switch(agent) {
       case 'SYSTEM_AUDIT': return 'text-red-400';
       case 'ProjectManager': return 'text-purple-400';
       case 'Developer': return 'text-cyan-400';
